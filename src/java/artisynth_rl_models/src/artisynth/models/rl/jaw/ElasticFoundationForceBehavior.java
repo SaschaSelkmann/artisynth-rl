@@ -2,12 +2,8 @@ package artisynth.models.rl.jaw;
 
 import java.util.ArrayList;
 
-import artisynth.core.mechmodels.CollisionResponse;
-import artisynth.core.mechmodels.ContactForceBehavior;
-import artisynth.core.mechmodels.ContactPoint;
-import artisynth.core.mechmodels.CollisionHandler;
-import maspack.collision.*;
-import maspack.geometry.*;
+import artisynth.core.materials.ContactForceBehavior;
+import artisynth.core.modelbase.ContactPoint;
 import maspack.matrix.Vector3d;
 
 /**
@@ -17,7 +13,7 @@ import maspack.matrix.Vector3d;
  * 
  * @author stavness
  */
-public class ElasticFoundationForceBehavior implements ContactForceBehavior {
+public class ElasticFoundationForceBehavior extends ContactForceBehavior {
 
 	double tol = 1e-10; // tolerance on distance < thickness
 	double myPoissonRatio;
@@ -25,7 +21,7 @@ public class ElasticFoundationForceBehavior implements ContactForceBehavior {
 	double myThickness;
 	double myDamping;
 	double K;
-	CollisionResponse response = null;
+	artisynth.core.mechmodels.CollisionResponse response = null;
 
 	public ElasticFoundationForceBehavior(double youngsModulus, double poissionRatio, double damping,
 			double thickness) {
@@ -41,13 +37,13 @@ public class ElasticFoundationForceBehavior implements ContactForceBehavior {
 		K = -(1 - myPoissonRatio) * myYoungsModulus / ((1 + myPoissonRatio) * (1 - 2 * myPoissonRatio));
 	}
 
-	public void setResponse(CollisionResponse resp) {
+	public void setResponse(artisynth.core.mechmodels.CollisionResponse resp) {
 		response = resp;
 	}
 
 	@Override
 	public void computeResponse(double[] fres, double dist, ContactPoint cpnt1, ContactPoint cpnt2, Vector3d normal,
-			double area) {
+			double area, int flags) {
 
 		// XXX assume cpnt1 is always interpenetrating vertex
 		// double area = 0.001d;

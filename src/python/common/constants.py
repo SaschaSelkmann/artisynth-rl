@@ -1,4 +1,5 @@
 TIME = 'time'
+INFO_STR = 'info'
 CURRENT = 'current'
 TARGET = 'target'
 PROPS = 'props'

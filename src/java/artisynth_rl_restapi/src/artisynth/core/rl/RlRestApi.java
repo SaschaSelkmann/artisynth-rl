@@ -17,25 +17,30 @@ public class RlRestApi {
 		this.serverPort = serverPort;
 		port(serverPort);
 
-		spark.Spark.get("/", (request, response) -> "Welcome to the REST API for the RL solutions in ArtiSynth.");
-		spark.Spark.post("/reset",
-				(request, response) -> rlController.resetState(Boolean.parseBoolean(request.body())), json());
-		spark.Spark.post("/setSeed",
-				(request, response) -> rlController.setSeed(Integer.parseInt(request.body())), json());
-		spark.Spark.post("/setTest",
-				(request, response) -> rlController.setTest(Boolean.parseBoolean(request.body())), json());
-		spark.Spark.get("/state", (request, response) -> rlController.getState(), json());
-		spark.Spark.get("/time", (request, response) -> rlController.getTime(), json());
-		spark.Spark.get("/obsSize", (request, response) -> rlController.getObservationSize(), json());
-		spark.Spark.get("/stateSize", (request, response) -> rlController.getStateSize(), json());
-		spark.Spark.get("/actionSize", (request, response) -> rlController.getActionSize(), json());
+		get("/", (req, res) -> "ArtiSynth RL REST API v2");
 
-		spark.Spark.get("/excitations", (request, response) -> rlController.getExcitations(), json());
-		spark.Spark.post("/excitations", setExcitations, json());
+		// --- info: returns all space sizes in one round-trip ---
+		get("/info", (req, res) -> rlController.getInfo(), json());
 
-		after((req, res) -> {
-			res.type("application/json");
-		});
+		// --- state ---
+		get("/state", (req, res) -> rlController.getState(), json());
+		get("/time",  (req, res) -> rlController.getTime(), json());
+
+		// --- space sizes (kept for backward compat) ---
+		get("/obsSize",    (req, res) -> rlController.getObservationSize(), json());
+		get("/stateSize",  (req, res) -> rlController.getStateSize(), json());
+		get("/actionSize", (req, res) -> rlController.getActionSize(), json());
+
+		// --- excitations ---
+		get("/excitations",  (req, res) -> rlController.getExcitations(), json());
+		post("/excitations", setExcitations, json());
+
+		// --- control ---
+		post("/reset",   (req, res) -> rlController.resetState(Boolean.parseBoolean(req.body())), json());
+		post("/setSeed", (req, res) -> rlController.setSeed(Integer.parseInt(req.body())), json());
+		post("/setTest", (req, res) -> rlController.setTest(Boolean.parseBoolean(req.body())), json());
+
+		after((req, res) -> res.type("application/json"));
 
 		exception(IllegalArgumentException.class, (e, req, res) -> {
 			res.status(400);
@@ -44,14 +49,9 @@ public class RlRestApi {
 	}
 
 	public Route setExcitations = (Request request, Response response) -> {
-		Log.debug("setExcitations length:" + request.contentLength() + " type: " + request.contentType());
-		Gson gson = new Gson();	
-		Log.debug(request.body());
+		Log.debug("setExcitations length:" + request.contentLength());
+		Gson gson = new Gson();
 		RlMuscleProps rlExcitations = gson.fromJson(request.body(), RlMuscleProps.class);
-		Log.debug(rlExcitations);
-		Log.debug(rlExcitations.getProps());
-		///----------------- 
-		RlState nextState = this.rlController.setExcitations(rlExcitations.getProps());
-		return nextState;
+		return this.rlController.setExcitations(rlExcitations.getProps());
 	};
 }

@@ -7,10 +7,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Random;
 
-import org.python.modules.struct;
-
-import com.github.sardine.model.Collection;
-
 import artisynth.core.mechmodels.Frame;
 import artisynth.core.mechmodels.MotionTargetComponent;
 import artisynth.core.mechmodels.MuscleExciter;
@@ -28,7 +24,6 @@ import artisynth.core.utils.Utils;
 import artisynth.core.workspace.RootModel;
 import maspack.matrix.Point3d;
 import maspack.matrix.Vector3d;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 public class RlJawDemo extends RootModel implements RlModelInterface {
 
@@ -377,7 +372,7 @@ public class RlJawDemo extends RootModel implements RlModelInterface {
 			// TODO: complete the reset pos implementation
 			if (mandible != null) {
 				if (rlTrack.getTest()) {
-					throw new NotImplementedException();
+					throw new UnsupportedOperationException("not implemented");
 				} else {
 					if (random) {
 						Point3d posAdd = new Point3d(getRandom(radius), getRandom(radius), getRandom(radius));
@@ -385,7 +380,7 @@ public class RlJawDemo extends RootModel implements RlModelInterface {
 						posAdd.add(currentPos);
 						mandible.setPosition(posAdd);
 					} else {
-						throw new NotImplementedException();
+						throw new UnsupportedOperationException("not implemented");
 					}
 				} // if (this.testTrialRun)
 			} else if (lowerincisor != null) {
@@ -400,7 +395,7 @@ public class RlJawDemo extends RootModel implements RlModelInterface {
 
 				} else {
 					if (random) {
-						throw new NotImplementedException();
+						throw new UnsupportedOperationException("not implemented");
 					} else {
 						lowerincisor.setPosition(getRandomPoint(jawPositionsArr));
 					}

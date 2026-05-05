@@ -417,13 +417,12 @@ public class RlPoint2PointDemo extends RootModel implements RlModelInterface {
 		RenderProps.setPointRadius((Renderable) target, 0.525);
 
 		if (useReactionForceTargetP) {
-			ForceTargetTerm forceTerm = new ForceTargetTerm(myTrackingController);
+			ForceTargetTerm forceTerm = myTrackingController.addForceTargetTerm();
 			ForceTarget ft = forceTerm.addForceTarget(mech.bodyConnectors().get("center_constraint"));
 			ft.setArrowSize(2);
 			RenderProps.setLineStyle(ft, LineStyle.CYLINDER);
 			RenderProps.setLineRadius(ft, 0.25);
 			forceTerm.setWeight(1d);
-			myTrackingController.addForceTargetTerm(forceTerm);
 		}
 
 		// myTrackingController.getSolver().setBounds(0.01, 0.99);

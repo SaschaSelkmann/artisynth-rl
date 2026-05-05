@@ -1,167 +1,380 @@
-# Reinforcement Learning for ArtiSynth
+# ArtiSynth-RL
 
-This repository holds the plugin for the biomechanical simulation 
-environment of [ArtiSynth](https://www.artisynth.org).
-The  plugin, implemented in Java, exposes the state of a Reinforcement Learning (RL)
-model through a RESTful API.
+Reinforcement learning framework for [ArtiSynth](https://www.artisynth.org) biomechanical simulations. ArtiSynth runs as a physics server; a Python Gymnasium client connects over a local REST API to train agents with Stable-Baselines3.
 
-This repository also holds sample RL model for ArtiSynth (in Java) and 
- and their corresponding OpenAI Gym environment (in Python).
-The environments follow the protocols of Gym environments and gives you the 
-flexibility to implement the agent with any deep framework of your choice.
+## Architecture
 
-**Researchers are free to use `artisynth_rl_restapi` in their work with 
-proper credits to the author(s). 
-Please contact authors for details.** 
+```
+┌─────────────────────────────────┐      HTTP / JSON      ┌─────────────────────────┐
+│  ArtiSynth (JVM)                │◄─────────────────────►│  Python (Gymnasium)     │
+│  RlModelInterface               │  :8080                │  ArtiSynthBase (gym.Env)│
+│  RlController                   │                       │  Point2PointEnv         │
+│  Spark REST API v2              │                       │  Stable-Baselines3 SAC  │
+└─────────────────────────────────┘                       └─────────────────────────┘
+```
 
-## Dependencies
+The Java side implements the physics and exposes muscle excitations + state via REST. The Python side wraps this as a standard Gymnasium environment.
 
-- **ArtiSynth**: [ArtiSynth](https://www.artisynth.org/Main/HomePage) is a 
-biomechanical modeling environment which supports both rigid bodies and finite 
-elements. ArtiSynth can be downloaded from its 
-[git repository](https://github.com/artisynth/artisynth_core),
-and its installation guide is available 
-[here](https://www.artisynth.org/Documentation/InstallGuide).
+---
 
-- **Maven2**: Maven is a software project manager. 
-Maven will then install the rest of the Java dependencies.
+## Prerequisites
 
-- **Eclipse**: The ArtiSynth project and its libraries are fully 
-integrated with the Eclipse java compiler. 
+| Dependency | Minimum | Notes |
+|---|---|---|
+| Java (JDK) | 17 | Must be on `PATH` as `javac`/`java` |
+| Maven | 3.9 | See below if not installed system-wide |
+| Python | 3.11 | Conda or system |
+| ArtiSynth | latest | Must be built; `$ARTISYNTH_HOME` must point to `artisynth_core/` |
 
-     
+### Install Maven 3.9 without root
 
-#### Other Dependencies
+```bash
+cd ~
+wget https://downloads.apache.org/maven/maven-3/3.9.6/binaries/apache-maven-3.9.6-bin.tar.gz
+tar xf apache-maven-3.9.6-bin.tar.gz
+export MVN=~/apache-maven-3.9.6/bin/mvn   # add to ~/.bashrc
+```
 
-In order to run the sample toy projects the following dependencies 
-need to be installed:
-
-- **keras**: Installation guide is available [here](https://keras.io).
-
-- **TensorFlow**:  Installation guide is available [here](
-https://www.tensorflow.org/install)
-
-- **PyTorch** Installation guide is available [here](
-https://pytorch.org/get-started/locally/)
-
-- **keras-rl**: Keras implementation of some RL algorithms
-[here](https://github.com/keras-rl/keras-rl).
-
-- **pytorch-a2c-ppo-acktr-gail**: PyTorch implementation of some RL algorithms 
-([here](https://github.com/ikostrikov/pytorch-a2c-ppo-acktr-gail)).
-
-
+---
 
 ## Installation
 
-1- Install the [Eclipse IDE](https://www.eclipse.org/downloads/)
+### 1. Build and source ArtiSynth
 
-2- Install *ArtiSynth* following its [installation guide](https://www.artisynth.org/Documentation/InstallGuide).
+```bash
+cd /path/to/artisynth_core
+make
+source setup.bash   # sets ARTISYNTH_HOME, CLASSPATH, PATH
+```
 
-3- Import the `artisynth_core` project (from step 2) into Eclipse.
+`setup.bash` uses `pwd`, so **you must `cd` into `artisynth_core` first**.
 
-4- Import the `artisynth_rl_models` and `artisynth_rl_restapi` projects (from this repository)
- into Eclipse.
+### 2. Run the setup script
 
-5- Set the environment variable `$ARTISYNTH_HOME` to the 
-`artisynth_core` directory.
+```bash
+cd /path/to/artisynth-rl
+source /path/to/artisynth_core/setup.bash   # if not already sourced
+bash setup.sh
+```
 
-6- Install Maven2: `sudo apt-get install maven2`   
+`setup.sh` will:
+1. Build the REST API fat JAR (`artisynth_rl_restapi-2.0.0.jar`) with Maven 3
+2. Compile all RL model classes with `make`
+3. Add both to `$CLASSPATH` (and persist the entries to `~/.bashrc`)
+4. Install Python dependencies from `requirements.txt`
 
-7- Run the command:    `source setup.sh`
+### 3. Install the Python package
 
-- If you used any of the third-party python libraries 
-(keras-rl, pytorch-a2c-ppo-acktr-gail, etc), make sure to include them in your PYTHONPATH.
+```bash
+cd src/python
+pip install -e .
+```
 
+---
 
-### Check installation
+## Running a training session
 
-- Check that ArtiSynth runs successfully by executing the command: `artisynth`
+### Step 1 — Launch ArtiSynth
 
-- Run ArtiSynth with one of the RL environments, e.g.: 
-`artisynth -model artisynth.models.rl.lumbarspine.RlLumbarSpineDemo`
+Open a terminal and start the simulation server. Model-specific args go inside `'[' ... ']'` (single-quoted brackets so the shell does not interpret them):
 
+**Point-to-Point (simplest model):**
+```bash
+artisynth -model artisynth.models.rl.point2point.RlPoint2PointDemo \
+  '[' -port 8080 -radius 5 ']' -play -noGui
+```
 
-## Run and Train
+**Lumbar Spine:**
+```bash
+artisynth -model artisynth.models.rl.lumbarspine.RlLumbarSpineDemo \
+  '[' -port 8080 ']' -play -noGui
+```
 
-Once you have the keras-rl library installed, 
-to train the point2point reaching toy project, run:
+**Jaw:**
+```bash
+artisynth -model artisynth.models.rl.jaw.RlJawDemo \
+  '[' -port 8080 -disc false -condyleConstraints false -condylarCapsule true ']' \
+  -play -noGui
+```
 
-    bash scripts/point2point.sh
+Drop `-noGui` to show the 3-D viewer.
 
-This will fire up ArtiSynth with the RlPoint2PointModel instantiated 
-and starts training. 
-Change the `artisynth-args` argument to initiate different models.
+### Step 2 — Train
 
-You can also run ArtiSynth separately by executing the command: 
+```bash
+cd src/python
+python main_sb3.py --env Point2PointEnv-v2 --timesteps 500000
+```
 
-    artisynth -model artisynth.models.rl.MODELPACKAGE.MODELNAME \
-        [ -port 8080 -FLAG1 FLAGVALUE1 -FLAG2 FLAGVALUE2... ] \
-        -play -noTimeline
+Checkpoints are saved every 10 000 steps to `results/Point2PointEnv-v2/`. The final model is saved to `results/Point2PointEnv-v2/sac`.
 
-And then run the `point2point.sh` bash file with `init-artisynth=false`.
-Make sure to set the `port` argument to the same port where you
-are running ArtiSynth.
+### Step 3 — Evaluate
 
-You can train the LumbarSpine model by running `bash scripts/lumbarspine.sh`.
-Similarly, ArtiSynth can be independently initiated with the 
-LumbarSpine model by running:
+```bash
+python main_sb3.py --env Point2PointEnv-v2 \
+  --load results/Point2PointEnv-v2/sac \
+  --test --test_episodes 20
+```
 
-    artisynth -model artisynth.models.rl.lumbarspine.RlLumbarSpineDemo \
-        [ -port 8080  ] \
-        -play -noTimeline
-  
+### Demo videos
 
-Training results and logs are stored in 4 directories, namely
+[![Point to point tracking](https://img.youtube.com/vi/UqHt4KbsaII/0.jpg)](https://www.youtube.com/watch?v=UqHt4KbsaII)
+[![Jaw model demo](https://img.youtube.com/vi/E9Ix0q5frSQ/0.jpg)](https://www.youtube.com/watch?v=E9Ix0q5frSQ)
 
-- trained: stores the trained model
-- log_agent: stores the agent-related logs with timestamp
-- log_env: stores the environment logs with timestamp
-- log_tb: stores the tensorboard logs which can be visualized during training 
-by tensorboard and setting the `--logdir=logs_tb/TB_LOGGING_DIR`.
+---
 
-The above 4 directories are created in the parent directory of where 
-`main_keras.py` is executed. In the `src/config.py` it is 
-assumed that the main file is executed from inside the `src` folder and
-the 4 directories are made in the artisynth_rl root.   
+## `main_sb3.py` reference
 
-### Available Environments
+### Environment options
 
-#### Point2Point
-    artisynth -model artisynth.models.rl.point2point.RlPoint2PointDemo \
-        [ -port 8080 -num 6 -demoType 2d -muscleOptLen 0.1 -radius 5 ] \
-        -play -noTimeline
-        
-#### LumbarSpine
+| Flag | Default | Description |
+|---|---|---|
+| `--env` | `Point2PointEnv-v2` | Gymnasium env ID |
+| `--ip` | `localhost` | ArtiSynth host |
+| `--port` | `8080` | REST API port (must match `-port` in the launch command) |
+| `--gui` | off | Show ArtiSynth viewer when auto-launching |
+| `--seed` | `12345` | RNG seed |
+| `--include_current_state` | on | Append current position to observation |
+| `--include_current_excitations` | on | Append muscle excitations to observation |
+| `--incremental_actions` | off | Actions are deltas added to current excitations |
+| `--zero_excitations_on_reset` | on | Zero all muscles on episode reset |
+| `--goal_threshold` | `0.1` | Distance (m) at which the episode is solved |
+| `--goal_reward` | `5.0` | Reward given on goal reached |
+| `--reset_step` | `200` | Max steps per episode before truncation |
+| `--wait_action` | `0.0` | Simulation seconds to advance after each action |
 
-    artisynth -model artisynth.models.rl.lumbarspine.RlLumbarSpineDemo \
-        [ -port 8080 ] \
-        -play -noTimeline
+### SAC hyper-parameters
 
-#### Jaw
-The Jaw model is modified from the 
-[Dynjaw package](https://github.com/artisynth/artisynth_models/tree/69fb58f521cead7b48250f320177475fcbea5ddc/src/artisynth/models/dynjaw) 
-in ArtiSynth, originally 
-developed by Ian Stavness (@stavness) form the University of Saskatchewan, 
-and later extended by Benedikt Sagl (Medical University of Vienna).
-The original jaw model is available in the 
-[artisynth_models](https://github.com/artisynth/artisynth_models)
-repository.
+| Flag | Default | Description |
+|---|---|---|
+| `--timesteps` | `500000` | Total environment steps |
+| `--lr` | `3e-4` | Learning rate |
+| `--batch_size` | `256` | Mini-batch size |
+| `--buffer_size` | `100000` | Replay buffer capacity |
+| `--learning_starts` | `1000` | Steps before the first gradient update |
+| `--tau` | `0.005` | Soft target update coefficient |
+| `--gamma` | `0.99` | Discount factor |
+| `--ent_coef` | `auto` | Entropy coefficient (`auto` or a float) |
 
-    artisynth -model artisynth.models.rl.jaw.RlJawDemo \
-    [  -port 8080 -disc false -condyleConstraints false -condylarCapsule true ]  \
-    -play -noTimeline
+### I/O
 
+| Flag | Default | Description |
+|---|---|---|
+| `--save_path` | `results/<env>/sac` | Path prefix for the saved model |
+| `--load` | — | Path to a saved model; resumes training or runs evaluation |
+| `--test` | off | Evaluation mode (requires `--load`) |
+| `--test_episodes` | `10` | Number of episodes to run in evaluation mode |
 
-**Demo**: You can watch a demo of the trained jaw model here   
-[![Jaw Model Demo](https://img.youtube.com/vi/E9Ix0q5frSQ/0.jpg)](https://www.youtube.com/watch?v=E9Ix0q5frSQ) 
+---
 
-### Testing
+## REST API v2 reference
 
-To test a trained model, set the `--load-path` to the saved model
-and set `--test=true`. 
-  
-#### Sample demos
-[![Point to point tracking video](https://img.youtube.com/vi/UqHt4KbsaII/0.jpg)](https://www.youtube.com/watch?v=UqHt4KbsaII) 
+The Spark HTTP server starts on the configured port when ArtiSynth launches the RL model. All responses are JSON.
 
-[![Out of domain tracking](https://img.youtube.com/vi/PQHBK3C28Q8/0.jpg)](https://www.youtube.com/watch?v=PQHBK3C28Q8)
+### Endpoints
+
+| Method | Path | Body | Description |
+|---|---|---|---|
+| `GET` | `/` | — | Health check, returns API version string |
+| `GET` | `/info` | — | Model metadata: action/obs/state sizes and name |
+| `GET` | `/state` | — | Full environment state (see below) |
+| `GET` | `/time` | — | Current simulation time in seconds |
+| `GET` | `/obsSize` | — | Observation vector length |
+| `GET` | `/stateSize` | — | State vector length |
+| `GET` | `/actionSize` | — | Number of controllable muscles |
+| `GET` | `/excitations` | — | Current muscle excitation values |
+| `POST` | `/excitations` | `{"excitations":[…]}` | Apply excitations and return new state |
+| `POST` | `/reset` | `true` or `false` | Reset episode; body controls whether excitations are zeroed |
+| `POST` | `/setSeed` | `12345` | Set RNG seed |
+| `POST` | `/setTest` | `true` or `false` | Toggle test mode (disables randomization) |
+
+### `/info` response
+
+```json
+{
+  "actionSize": 8,
+  "obsSize": 12,
+  "stateSize": 28,
+  "name": "InvTracker"
+}
+```
+
+### `/state` response
+
+```json
+{
+  "observation": {
+    "point":     { "position": [x, y, z], "velocity": [vx, vy, vz] },
+    "point_ref": { "position": [x, y, z], "velocity": [vx, vy, vz] }
+  },
+  "properties": {},
+  "excitations":  [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0],
+  "muscleForces": [f0, f1, "…"],
+  "time": 1.24,
+  "terminated": false,
+  "truncated": false
+}
+```
+
+`terminated` and `truncated` are set by `RlState` on the Java side and can be read by custom Python environments to avoid an extra HTTP round-trip.
+
+---
+
+## Building a custom RL model
+
+### 1. Implement `RlModelInterface` in your `RootModel`
+
+```java
+public class MyRlModel extends RootModel implements RlModelInterface {
+
+    private int port = 8080;
+    private RlController rlController;
+    private MyTargetController targetController;
+
+    @Override
+    public void build(String[] args) throws IOException {
+        parseArgs(args);
+        // build your MechModel, add muscles, geometry, etc.
+        addRlController();
+    }
+
+    @Override
+    public void parseArgs(String[] args) {
+        // parse -port and any model-specific flags
+        for (int i = 0; i < args.length; i++) {
+            if ("-port".equals(args[i])) port = Integer.parseInt(args[++i]);
+        }
+    }
+
+    @Override
+    public void addRlController() {
+        rlController = new RlController("InvTracker", this);
+        // register controllable muscles:
+        for (MuscleExciter e : myExciters) {
+            rlController.addExciter(e);
+        }
+        // register current and target tracked components:
+        rlController.addMotionTarget(currentPoint);
+        rlController.addMotionTarget(targetPoint);
+        addController(rlController);
+        // start the REST server:
+        new RlRestApi(rlController, port);
+    }
+
+    @Override
+    public ArrayList<RlProp> getRlProps() {
+        ArrayList<RlProp> props = new ArrayList<>();
+        props.add(new RlProp("point",     currentPoint, "position", "velocity"));
+        props.add(new RlProp("point_ref", targetPoint,  "position", "velocity"));
+        return props;
+    }
+
+    @Override
+    public RlTargetControllerInterface getTargetMotionController() {
+        return targetController;
+    }
+
+    @Override
+    public void resetState() {
+        // randomize target position, reset rigid-body poses, etc.
+    }
+
+    @Override
+    public double getTime() {
+        return myMechModel.getTime();
+    }
+}
+```
+
+### 2. Register a Gymnasium environment
+
+Add an entry in `src/python/artisynth_envs/__init__.py`:
+
+```python
+from gymnasium.envs.registration import register
+
+register(
+    id='MyEnv-v1',
+    entry_point='artisynth_envs.envs.my_env:MyEnv',
+    kwargs={
+        'artisynth_model': 'artisynth.models.rl.mymodel.MyRlModel',
+        'artisynth_args': '-radius 5',
+        'goal_threshold': 0.05,
+        'goal_reward': 10.0,
+        'reset_step': 300,
+        'wait_action': 0.0,
+        # ... other ArtiSynthBase defaults ...
+    },
+)
+```
+
+Then subclass `Point2PointEnv` (or `ArtiSynthBase` directly) and override `_calculate_reward` and `get_state_boundaries` as needed.
+
+### 3. Launch and train
+
+```bash
+artisynth -model artisynth.models.rl.mymodel.MyRlModel '[' -port 8080 ']' -play -noGui
+python main_sb3.py --env MyEnv-v1
+```
+
+---
+
+## Project layout
+
+```
+artisynth-rl/
+├── setup.sh                          # one-shot build + install
+├── requirements.txt                  # Python dependencies
+├── environment.yml                   # Conda environment spec
+└── src/
+    ├── java/
+    │   ├── artisynth_rl_restapi/     # Spark REST server (built as fat JAR)
+    │   │   └── src/artisynth/core/rl/
+    │   │       ├── RlRestApi.java            # HTTP routes
+    │   │       ├── RlControllerInterface.java
+    │   │       ├── RlState.java              # response DTO
+    │   │       └── RlStateSerializer.java    # Gson adapter
+    │   └── artisynth_rl_models/      # RL-aware ArtiSynth models
+    │       └── src/artisynth/
+    │           ├── core/rl/
+    │           │   ├── RlController.java     # implements RlControllerInterface
+    │           │   ├── RlModelInterface.java # implement this in your RootModel
+    │           │   └── RlProp.java           # property descriptor for observations
+    │           └── models/rl/
+    │               ├── point2point/RlPoint2PointDemo.java
+    │               ├── lumbarspine/RlLumbarSpineDemo.java
+    │               └── jaw/RlJawDemo.java
+    └── python/
+        ├── main_sb3.py               # training / evaluation entry point
+        ├── artisynth_envs/
+        │   ├── __init__.py           # Gymnasium env registration
+        │   ├── artisynth_base_env.py # base Gymnasium class (REST client)
+        │   └── envs/
+        │       └── point2point_env.py
+        └── common/
+            ├── rest_client.py
+            └── constants.py
+```
+
+---
+
+## Troubleshooting
+
+**`ARTISYNTH_HOME` not set / model class not found**
+`setup.bash` relies on `pwd`. Always `cd /path/to/artisynth_core && source setup.bash` before building or running.
+
+**`ClassNotFoundException` when launching a model**
+The fat JAR and model classes must both be on `$CLASSPATH`. Re-run `bash setup.sh` or export them manually:
+```bash
+export CLASSPATH=/path/to/artisynth_rl_restapi-2.0.0.jar:/path/to/artisynth_rl_models/classes:$CLASSPATH
+```
+
+**Simulation time freezes / training hangs**
+A tight HTTP polling loop can starve the JVM scheduler and freeze simulation time. Keep `--wait_action 0.0` (the default). If you call `_sleep_sim` in a custom environment, ensure there is a `time.sleep(0.001)` yield inside the loop.
+
+**Port already in use**
+Kill the previous ArtiSynth process or pick a different port and pass the same value to both sides:
+```bash
+artisynth -model … '[' -port 8081 ']' -play -noGui &
+python main_sb3.py --env Point2PointEnv-v2 --port 8081
+```

@@ -3,12 +3,9 @@ package artisynth.core.monitors;
 import java.lang.*;
 import java.util.ArrayList;
 
-import org.python.antlr.op.Is;
-
 import artisynth.core.modelbase.MonitorBase;
 import artisynth.core.rl.Log;
 import maspack.matrix.AxisAngle;
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 
 public class AsyncDualBufferMonitor {
 	Object buffer1, buffer2;
@@ -43,7 +40,7 @@ public class AsyncDualBufferMonitor {
 			
 		} else {
 			Log.info(o.getClass());
-			throw new NotImplementedException();
+			throw new UnsupportedOperationException("not implemented");
 		}
 	}
 

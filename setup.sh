@@ -1,31 +1,53 @@
 #!/bin/bash
+set -e
 
-# Build Maven project
-echo "Packaging artisynth_rl_restapi and its dependencies into .jar library"
-cd src/java/artisynth_rl_restapi
-mvn package
-cd ../../..
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
-
-# Add class path of artisynth_rl_models and artisynth_rl_restapi to CLASSPATH
-NEW_PATH="$PWD"'/src/java/artisynth_rl_models/bin/'
-echo $NEW_PATH
-
-if [[ ":$CLASSPATH:" == *":$NEW_PATH:"* ]]; then
-	echo "Path to artisynth-rl is correctly set"
-else
-	echo 'export CLASSPATH='"$NEW_PATH" >> ~/.bashrc
-	for jar in $(ls $PWD/src/java/artisynth_rl_restapi/target/*.jar); do echo 'export CLASSPATH='"$jar"':$CLASSPATH' >> ~/.bashrc ; done
-	echo "Updated JAVA CLASSPATH environment variable in ~/bashrc"
+# ── 1. Validate ARTISYNTH_HOME ────────────────────────────────────────────────
+if [ -z "$ARTISYNTH_HOME" ]; then
+    echo "ERROR: ARTISYNTH_HOME is not set."
+    echo "  cd to artisynth_core and run:  source setup.bash"
+    exit 1
 fi
+echo "Using ARTISYNTH_HOME=$ARTISYNTH_HOME"
 
-# Add $ARTISYNTH_HOME/bin to PATH to run artisynth from the command line
-if [ -z "$ARTISYNTH_HOME" ]
-then
-	echo -e "\e[33mARTISYNTH_HOME variable is not set\e[0m"
-else
-	echo 'export PATH='"$ARTISYNTH_HOME"'/bin:$PATH' >> ~/.bashrc
-	echo "Added $ARTISYNTH_HOME/bin to PATH in ~/bashrc"	
-fi
+# ── 2. Build REST API fat JAR with Maven 3 ────────────────────────────────────
+MVN="${MVN:-mvn}"
+echo "Building artisynth_rl_restapi …"
+cd "$SCRIPT_DIR/src/java/artisynth_rl_restapi"
+$MVN package -q
+RESTAPI_JAR="$SCRIPT_DIR/src/java/artisynth_rl_restapi/target/artisynth_rl_restapi-2.0.0.jar"
+echo "  JAR: $RESTAPI_JAR"
 
-source ~/.bashrc
+# ── 3. Compile artisynth_rl_models ────────────────────────────────────────────
+echo "Compiling artisynth_rl_models …"
+cd "$SCRIPT_DIR/src/java/artisynth_rl_models"
+make
+MODELS_CLASSES="$SCRIPT_DIR/src/java/artisynth_rl_models/classes"
+
+# ── 4. Update CLASSPATH ───────────────────────────────────────────────────────
+add_to_classpath() {
+    local entry="$1"
+    if [[ ":$CLASSPATH:" != *":$entry:"* ]]; then
+        export CLASSPATH="$entry:$CLASSPATH"
+        echo "  Added to CLASSPATH: $entry"
+    fi
+}
+
+add_to_classpath "$MODELS_CLASSES"
+add_to_classpath "$RESTAPI_JAR"
+
+# Persist to ~/.bashrc if not already there
+for entry in "$MODELS_CLASSES" "$RESTAPI_JAR"; do
+    line="export CLASSPATH=\"$entry:\$CLASSPATH\""
+    grep -qF "$line" ~/.bashrc 2>/dev/null || echo "$line" >> ~/.bashrc
+done
+
+# ── 5. Python dependencies ────────────────────────────────────────────────────
+echo "Installing Python dependencies …"
+pip install -q -r "$SCRIPT_DIR/requirements.txt"
+
+echo ""
+echo "Setup complete. To launch a training run:"
+echo "  cd $SCRIPT_DIR/src/python"
+echo "  python main_sb3.py --env Point2PointEnv-v2"

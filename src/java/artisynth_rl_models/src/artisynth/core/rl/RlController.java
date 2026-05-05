@@ -8,6 +8,8 @@
 package artisynth.core.rl;
 
 import java.util.concurrent.locks.*;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.awt.Color;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -19,9 +21,6 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 
-import com.sun.org.apache.bcel.internal.generic.ISTORE;
-
-import sun.reflect.generics.reflectiveObjects.NotImplementedException;
 import artisynth.core.gui.ControlPanel;
 import artisynth.core.inverse.TargetFrame;
 import artisynth.core.inverse.TargetPoint;
@@ -135,7 +134,7 @@ public class RlController extends ControllerBase
 		// setup points
 		targetPoints = new PointList<TargetPoint>(TargetPoint.class, "targetPoints");
 		// always show this component, even if it's empty
-		targetPoints.setNavpanelVisibility(NavpanelVisibility.ALWAYS);
+		targetPoints.setNavpanelVisibility(ModelComponent.NavpanelVisibility.ALWAYS);
 		add(targetPoints);
 		sourcePoints = new ReferenceList("sourcePoints");
 		add(sourcePoints);
@@ -143,14 +142,14 @@ public class RlController extends ControllerBase
 		// setup frames
 		targetFrames = new RenderableComponentList<TargetFrame>(TargetFrame.class, "targetFrames");
 		// always show this component, even if it's empty:
-		targetFrames.setNavpanelVisibility(NavpanelVisibility.ALWAYS);
+		targetFrames.setNavpanelVisibility(ModelComponent.NavpanelVisibility.ALWAYS);
 		add(targetFrames);
 		sourceFrames = new ReferenceList("sourceFrames");
 		add(sourceFrames);
 
 		exciters = new ComponentList<ExcitationComponent>(ExcitationComponent.class, "excitationSources");
 		// always show this component, even if it's empty:
-		exciters.setNavpanelVisibility(NavpanelVisibility.ALWAYS);
+		exciters.setNavpanelVisibility(ModelComponent.NavpanelVisibility.ALWAYS);
 		add(exciters);
 
 		initTargetRenderProps();
@@ -251,7 +250,7 @@ public class RlController extends ControllerBase
 		} else if (source instanceof Frame) {
 			target = addTargetFrame((RigidBody) source);
 		} else
-			throw new NotImplementedException();
+			throw new UnsupportedOperationException("not implemented");
 		return target;
 	}
 
@@ -418,7 +417,7 @@ public class RlController extends ControllerBase
 
 	@Override
 	public NavpanelDisplay getNavpanelDisplay() {
-		return NavpanelDisplay.NORMAL;
+		return CompositeComponent.NavpanelDisplay.NORMAL;
 	}
 
 	@Override
@@ -660,7 +659,7 @@ public class RlController extends ControllerBase
 
 				state.add(rlComponent);
 			} else
-				throw new NotImplementedException();
+				throw new UnsupportedOperationException("not implemented");
 		}
 		return state;
 	}
@@ -744,13 +743,23 @@ public class RlController extends ControllerBase
 	}
 
 	@Override
-	public String resetState(boolean setExcitationsZero) {
+	public RlState resetState(boolean setExcitationsZero) {
 		myInverseModel.resetState();
-		if (setExcitationsZero) {			
+		if (setExcitationsZero) {
 			this.setExcitationsZero();
 		}
 		Log.info("Reset");
-		return "Reset Done";
+		return getState();
+	}
+
+	@Override
+	public Map<String, Object> getInfo() {
+		Map<String, Object> info = new LinkedHashMap<>();
+		info.put("actionSize", getActionSize());
+		info.put("obsSize", getObservationSize());
+		info.put("stateSize", getStateSize());
+		info.put("name", getName());
+		return info;
 	}
 	
 	@Override

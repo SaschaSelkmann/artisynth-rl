@@ -6,16 +6,26 @@ public class RlState {
 	private ArrayList<RlComponent> rlComponents;
 	private ArrayList<RlProp> rlProps;
 	private RlMuscleProps excitations;
-	private RlMuscleProps muscleForces;	
+	private RlMuscleProps muscleForces;
 	private double time;
-	
+	private boolean terminated;
+	private boolean truncated;
+
 	public RlState() {
 		time = 0.;
 		rlComponents = new ArrayList<RlComponent>();
 		rlProps = new ArrayList<RlProp>();
 		excitations = new RlMuscleProps();
 		muscleForces = new RlMuscleProps();
+		terminated = false;
+		truncated = false;
 	}
+
+	public boolean isTerminated() { return terminated; }
+	public void setTerminated(boolean terminated) { this.terminated = terminated; }
+
+	public boolean isTruncated() { return truncated; }
+	public void setTruncated(boolean truncated) { this.truncated = truncated; }
 	
 	public void setTime(double t) { 
 		this.time = t;
