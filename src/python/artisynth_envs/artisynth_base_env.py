@@ -47,6 +47,7 @@ class ArtiSynthBase(gym.Env, ABC):
         if not RestClient.server_is_alive(ip, port):
             self.run_artisynth(ip, port, artisynth_model, gui, artisynth_args)
 
+        self._ensure_simulation_playing()
         self.set_test_mode(test)
         if seed is not None:
             self.net.send_msg(seed, request_type=c.POST_STR, message=c.SET_SEED_STR)
@@ -91,11 +92,47 @@ class ArtiSynthBase(gym.Env, ABC):
             high = np.append(high, np.full(action_size, c.HIGH_EXCITATION, dtype=np.float32))
         return low, high
 
+    @staticmethod
+    def _free_port(port):
+        """Kill any process currently listening on `port`."""
+        try:
+            result = subprocess.run(
+                ['lsof', '-ti', f':{port}'],
+                capture_output=True, text=True,
+            )
+            pids = result.stdout.strip().split()
+            for pid in pids:
+                try:
+                    os.kill(int(pid), signal.SIGTERM)
+                    logger.info('Killed stale process %s on port %d', pid, port)
+                except ProcessLookupError:
+                    pass
+            if pids:
+                _time.sleep(1)  # give the OS time to release the port
+        except FileNotFoundError:
+            pass  # lsof not available; proceed anyway
+
+    def _ensure_simulation_playing(self):
+        """Warn and auto-start if ArtiSynth was launched without -play."""
+        try:
+            is_playing = self.net.send_msg(request_type=c.GET_STR, message=c.IS_PLAYING_STR)
+        except Exception:
+            return  # older server without /isPlaying — skip silently
+        if not is_playing:
+            logger.warning(
+                'ArtiSynth simulation is not running (started without -play?). '
+                'Sending /play to start it.'
+            )
+            self.net.send_msg(True, request_type=c.POST_STR, message=c.PLAY_STR)
+            _time.sleep(1.0)  # give the scheduler time to begin advancing
+
     def run_artisynth(self, ip, port, artisynth_model, gui, artisynth_args=''):
         if ip not in ('localhost', '0.0.0.0', '127.0.0.1'):
             raise NotImplementedError('Cannot launch ArtiSynth on a remote host.')
         if RestClient.server_is_alive(ip, port):
             return
+        # Port may be occupied by a crashed/hung ArtiSynth that no longer responds.
+        self._free_port(port)
         cmd = (f'artisynth -model {artisynth_model} '
                f'[ -port {port} {artisynth_args} ] -play -noTimeline')
         if not gui:
@@ -104,7 +141,7 @@ class ArtiSynthBase(gym.Env, ABC):
             subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull)
         while not RestClient.server_is_alive(ip, port):
             logger.info('Waiting for ArtiSynth at port %d …', port)
-            time.sleep(3)
+            _time.sleep(3)
 
     # --- low-level REST helpers ---
     def get_obs_size(self):
@@ -125,9 +162,12 @@ class ArtiSynthBase(gym.Env, ABC):
     # --- Gymnasium API ---
 
     def reset(self, *, seed: Optional[int] = None, options: Optional[dict] = None):
-        super().reset(seed=seed)
-        if seed is not None:
-            self.net.send_msg(seed, request_type=c.POST_STR, message=c.SET_SEED_STR)
+        super().reset(seed=seed)  # initialises / re-seeds self.np_random
+
+        # Derive the Java-side seed from Gymnasium's seeded RNG so that
+        # reset(seed=X) produces a fully reproducible initial observation.
+        java_seed = int(self.np_random.integers(0, 2**31 - 1))
+        self.net.send_msg(java_seed, request_type=c.POST_STR, message=c.SET_SEED_STR)
 
         state_dict = self.net.send_msg(
             self.zero_excitations_on_reset,

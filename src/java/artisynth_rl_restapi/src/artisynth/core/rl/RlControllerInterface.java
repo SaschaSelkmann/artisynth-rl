@@ -20,4 +20,8 @@ public interface RlControllerInterface {
 	boolean getTest();
 	/** Return model metadata (sizes, name) in a single call. */
 	Map<String, Object> getInfo();
+	/** True if the simulation scheduler is currently advancing. */
+	boolean isPlaying();
+	/** Start the simulation scheduler if it is not already running. */
+	void play();
 }

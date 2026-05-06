@@ -29,6 +29,8 @@ MUSCLE_FORCES_STR = 'muscleForces'
 OBSERVATION_STR = 'observation'
 SET_SEED_STR = 'setSeed'
 SET_TEST_STR = 'setTest'
+IS_PLAYING_STR = 'isPlaying'
+PLAY_STR = 'play'
 
 LOGGER_STR = 'artisynth_logger'
 

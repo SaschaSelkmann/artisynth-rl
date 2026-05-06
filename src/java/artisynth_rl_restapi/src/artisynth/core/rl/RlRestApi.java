@@ -40,6 +40,10 @@ public class RlRestApi {
 		post("/setSeed", (req, res) -> rlController.setSeed(Integer.parseInt(req.body())), json());
 		post("/setTest", (req, res) -> rlController.setTest(Boolean.parseBoolean(req.body())), json());
 
+		// --- scheduler ---
+		get("/isPlaying", (req, res) -> rlController.isPlaying(), json());
+		post("/play", (req, res) -> { rlController.play(); return true; }, json());
+
 		after((req, res) -> res.type("application/json"));
 
 		exception(IllegalArgumentException.class, (e, req, res) -> {

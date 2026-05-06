@@ -516,8 +516,19 @@ public class InvLumbarSpineDemo extends LumbarSpineBaseDemo {
 			r.setSeed(123);
 		}
 
+		public RandomTargetController(ArrayList<MotionTargetComponent> list, Random random) {
+			motionTargetComponents = list;
+			r = random;
+		}
+
 		public void reset() {
 			this.reset = true;
+		}
+
+		@Override
+		public void randomizeTarget() {
+			flexAll = (r.nextDouble() - 0.5) * MAX_FLEX_EXTEND * 2;
+			applyFlexAll(flexAll);
 		}
 
 		public void apply(double t0, double t1) {
@@ -533,7 +544,7 @@ public class InvLumbarSpineDemo extends LumbarSpineBaseDemo {
 					reset = false;
 					flexAll = (r.nextDouble() - 0.5) * MAX_FLEX_EXTEND * 2;
 				}
-				
+
 				applyFlexAll(flexAll);
 
 			}

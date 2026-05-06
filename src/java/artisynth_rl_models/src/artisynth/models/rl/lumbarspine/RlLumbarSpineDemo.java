@@ -5,6 +5,7 @@ import java.util.ArrayList;
 import java.util.Map;
 
 import artisynth.core.mechmodels.MuscleExciter;
+import artisynth.core.modelbase.ComponentState;
 import artisynth.core.rl.RlModelInterface;
 import artisynth.core.rl.RlProp;
 import artisynth.core.rl.RlTargetControllerInterface;
@@ -17,7 +18,8 @@ public class RlLumbarSpineDemo extends InvLumbarSpineDemo implements RlModelInte
 	protected int port = 8080;
 
 	RandomTargetController targetMotionController;
-	RlController rlTrack;	
+	RlController rlTrack;
+	private ComponentState initialState;	
 
 	public RlLumbarSpineDemo() {
 		this("RlLumbarSpineAngular");
@@ -32,6 +34,9 @@ public class RlLumbarSpineDemo extends InvLumbarSpineDemo implements RlModelInte
 		super.build(args);
 		parseArgs(args);
 		addRlController();
+
+		initialState = createState(null);
+		getState(initialState);
 	}
 
 	@Override
@@ -54,7 +59,7 @@ public class RlLumbarSpineDemo extends InvLumbarSpineDemo implements RlModelInte
 			rlTrack.addExciter(m);
 		}
 
-		targetMotionController = new RandomTargetController(rlTrack.getMotionTargets());
+		targetMotionController = new RandomTargetController(rlTrack.getMotionTargets(), rlTrack.random);
 
 		addController(targetMotionController);
 		addController(rlTrack);
@@ -66,7 +71,9 @@ public class RlLumbarSpineDemo extends InvLumbarSpineDemo implements RlModelInte
 
 	@Override
 	public void resetState() {
-		targetMotionController.reset();
+		setState(initialState);
+		initialize(0.0);
+		targetMotionController.randomizeTarget();
 	}
 
 	@Override

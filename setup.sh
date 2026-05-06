@@ -11,8 +11,24 @@ if [ -z "$ARTISYNTH_HOME" ]; then
 fi
 echo "Using ARTISYNTH_HOME=$ARTISYNTH_HOME"
 
-# ── 2. Build REST API fat JAR with Maven 3 ────────────────────────────────────
+# ── 1b. Check for Maven ───────────────────────────────────────────────────────
 MVN="${MVN:-mvn}"
+if ! command -v "$MVN" &>/dev/null; then
+    echo ""
+    echo "ERROR: Maven not found ('$MVN' command missing)."
+    echo "  Install it with one of:"
+    echo "    sudo apt install maven          # system-wide (Ubuntu/Debian)"
+    echo "  or without root:"
+    echo "    cd ~"
+    echo "    wget https://downloads.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz"
+    echo "    tar xf apache-maven-3.9.9-bin.tar.gz"
+    echo "    export MVN=~/apache-maven-3.9.9/bin/mvn   # add to ~/.bashrc"
+    echo "  Then re-run this script."
+    exit 1
+fi
+echo "Using Maven: $("$MVN" --version 2>&1 | head -1)"
+
+# ── 2. Build REST API fat JAR with Maven ──────────────────────────────────────
 echo "Building artisynth_rl_restapi …"
 cd "$SCRIPT_DIR/src/java/artisynth_rl_restapi"
 $MVN package -q
@@ -48,6 +64,18 @@ echo "Installing Python dependencies …"
 pip install -q -r "$SCRIPT_DIR/requirements.txt"
 
 echo ""
-echo "Setup complete. To launch a training run:"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+echo "Setup complete."
+echo ""
+echo "IMPORTANT: apply the new CLASSPATH to your current shell:"
+echo ""
+echo "  source ~/.bashrc"
+echo ""
+echo "(Or open a new terminal — the entries are already in ~/.bashrc.)"
+echo ""
+echo "Then launch a training run:"
+echo "  artisynth -model artisynth.models.rl.point2point.RlPoint2PointDemo \\"
+echo "    '[' -port 8080 -radius 5 ']' -play -noGui"
 echo "  cd $SCRIPT_DIR/src/python"
 echo "  python main_sb3.py --env Point2PointEnv-v2"
+echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

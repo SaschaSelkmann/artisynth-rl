@@ -23,6 +23,7 @@ import artisynth.core.mechmodels.Particle;
 import artisynth.core.mechmodels.Point;
 import artisynth.core.mechmodels.RigidBody;
 import artisynth.core.modelbase.ComponentList;
+import artisynth.core.modelbase.ComponentState;
 import artisynth.core.modelbase.Controller;
 import artisynth.core.modelbase.ControllerBase;
 import artisynth.core.modelbase.Model;
@@ -54,6 +55,7 @@ public class RlPoint2PointDemo extends RootModel implements RlModelInterface {
 
 	String point_name = "point";
 	double myTime = 0;
+	private ComponentState initialState;
 	
 	RandomTargetController targetMotionController;
 	RlController rlTrack;
@@ -111,6 +113,11 @@ public class RlPoint2PointDemo extends RootModel implements RlModelInterface {
 		setupRenderProps();
 		addMuscleExciters();
 		addRlController();
+
+		// Snapshot taken after full model construction (incl. controllers).
+		// resetState() restores from this to guarantee a deterministic base state.
+		initialState = createState(null);
+		getState(initialState);
 	}
 
 	private void addMuscleExciters() {
@@ -477,7 +484,12 @@ public class RlPoint2PointDemo extends RootModel implements RlModelInterface {
 
 	@Override
 	public void resetState() {
-		targetMotionController.reset();
+		// 1. Restore complete model state from the post-build snapshot.
+		setState(initialState);
+		// 2. Reinitialize integrators and controller-internal state at t=0.
+		initialize(0.0);
+		// 3. Apply episode-specific target randomization on the clean base state.
+		targetMotionController.randomizeTarget();
 	}
 
 	@Override
@@ -515,6 +527,11 @@ public class RlPoint2PointDemo extends RootModel implements RlModelInterface {
 			this.reset = true;
 		}
 
+		@Override
+		public void randomizeTarget() {
+			resetRefPosition();
+		}
+
 		public void apply(double t0, double t1) {
 			if (t0 > -1) {
 
@@ -537,6 +554,8 @@ public class RlPoint2PointDemo extends RootModel implements RlModelInterface {
 			Point point_ref = (Point) motionTargetComponents.get(0);
 			Point3d pos = getRandomTarget(new Point3d(0, 0, 0), pointGenerateRadius);
 			point_ref.setPosition(pos);
+			// Clear velocity so no spurious momentum carries over from the previous episode.
+			point_ref.setVelocity(new Vector3d());
 		}
 	}
 

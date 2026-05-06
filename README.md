@@ -22,17 +22,23 @@ The Java side implements the physics and exposes muscle excitations + state via 
 | Dependency | Minimum | Notes |
 |---|---|---|
 | Java (JDK) | 17 | Must be on `PATH` as `javac`/`java` |
-| Maven | 3.9 | See below if not installed system-wide |
+| Maven | 3.8+ | `sudo apt install maven` or see below for a root-free install |
 | Python | 3.11 | Conda or system |
 | ArtiSynth | latest | Must be built; `$ARTISYNTH_HOME` must point to `artisynth_core/` |
 
-### Install Maven 3.9 without root
+### Install Maven
 
+**With root (recommended):**
+```bash
+sudo apt install maven   # Ubuntu/Debian — installs Maven 3.8+
+```
+
+**Without root:**
 ```bash
 cd ~
-wget https://downloads.apache.org/maven/maven-3/3.9.6/binaries/apache-maven-3.9.6-bin.tar.gz
-tar xf apache-maven-3.9.6-bin.tar.gz
-export MVN=~/apache-maven-3.9.6/bin/mvn   # add to ~/.bashrc
+wget https://downloads.apache.org/maven/maven-3/3.9.9/binaries/apache-maven-3.9.9-bin.tar.gz
+tar xf apache-maven-3.9.9-bin.tar.gz
+export MVN=~/apache-maven-3.9.9/bin/mvn   # add to ~/.bashrc
 ```
 
 ---
@@ -43,8 +49,8 @@ export MVN=~/apache-maven-3.9.6/bin/mvn   # add to ~/.bashrc
 
 ```bash
 cd /path/to/artisynth_core
-make
 source setup.bash   # sets ARTISYNTH_HOME, CLASSPATH, PATH
+make
 ```
 
 `setup.bash` uses `pwd`, so **you must `cd` into `artisynth_core` first**.
@@ -63,7 +69,17 @@ bash setup.sh
 3. Add both to `$CLASSPATH` (and persist the entries to `~/.bashrc`)
 4. Install Python dependencies from `requirements.txt`
 
-### 3. Install the Python package
+### 3. Apply the new CLASSPATH to your shell
+
+`setup.sh` adds two `export CLASSPATH=…` lines to `~/.bashrc`. They are **not** active in the terminal where you just ran `setup.sh` (because `bash setup.sh` runs in a subprocess). Apply them now:
+
+```bash
+source ~/.bashrc
+```
+
+Or simply open a new terminal — the entries are already persisted.
+
+### 4. Install the Python package
 
 ```bash
 cd src/python
@@ -360,11 +376,18 @@ artisynth-rl/
 
 ## Troubleshooting
 
+**`mvn: command not found` during setup**
+Maven is not installed. Install it with `sudo apt install maven` (Ubuntu/Debian) or follow the root-free install steps in the Prerequisites section above, then re-run `bash setup.sh`.
+
 **`ARTISYNTH_HOME` not set / model class not found**
 `setup.bash` relies on `pwd`. Always `cd /path/to/artisynth_core && source setup.bash` before building or running.
 
 **`ClassNotFoundException` when launching a model**
-The fat JAR and model classes must both be on `$CLASSPATH`. Re-run `bash setup.sh` or export them manually:
+The fat JAR and model classes must be on `$CLASSPATH`. After running `bash setup.sh`, you must also apply the changes to your current shell:
+```bash
+source ~/.bashrc
+```
+Or open a new terminal. Re-run `bash setup.sh` first if you skipped it, then source. You can also export manually:
 ```bash
 export CLASSPATH=/path/to/artisynth_rl_restapi-2.0.0.jar:/path/to/artisynth_rl_models/classes:$CLASSPATH
 ```
@@ -373,8 +396,15 @@ export CLASSPATH=/path/to/artisynth_rl_restapi-2.0.0.jar:/path/to/artisynth_rl_m
 A tight HTTP polling loop can starve the JVM scheduler and freeze simulation time. Keep `--wait_action 0.0` (the default). If you call `_sleep_sim` in a custom environment, ensure there is a `time.sleep(0.001)` yield inside the loop.
 
 **Port already in use**
-Kill the previous ArtiSynth process or pick a different port and pass the same value to both sides:
+A previous ArtiSynth run didn't exit cleanly. Free the port before relaunching:
+```bash
+kill $(lsof -ti:8080) 2>/dev/null; true
+```
+When Python auto-launches ArtiSynth (`run_artisynth`), this is handled automatically. For manual launches you must run the command above yourself, or pick a different port and pass the same value to both sides:
 ```bash
 artisynth -model … '[' -port 8081 ']' -play -noGui &
 python main_sb3.py --env Point2PointEnv-v2 --port 8081
 ```
+
+**Training freezes / model stops responding**
+ArtiSynth is a separate JVM process; if it hangs, the Python side used to wait forever on the HTTP call. Now every request has a 30-second timeout — you will see a `requests.exceptions.Timeout` error instead of a silent freeze. If this happens regularly, check the ArtiSynth console for JVM errors, or reduce simulation complexity.

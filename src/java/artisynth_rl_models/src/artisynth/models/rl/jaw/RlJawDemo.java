@@ -11,6 +11,7 @@ import artisynth.core.mechmodels.Frame;
 import artisynth.core.mechmodels.MotionTargetComponent;
 import artisynth.core.mechmodels.MuscleExciter;
 import artisynth.core.mechmodels.Point;
+import artisynth.core.modelbase.ComponentState;
 import artisynth.core.modelbase.ControllerBase;
 import artisynth.core.modelbase.StepAdjustment;
 import artisynth.core.monitors.AsyncDualBufferMonitor;
@@ -41,6 +42,7 @@ public class RlJawDemo extends RootModel implements RlModelInterface {
 	private boolean condyleConstraints = false;
 	private boolean condylarCapsule = false;
 	private Double myTime;
+	private ComponentState initialState;
 	protected AsyncDualBufferMonitor monitorOcclusalForces = new AsyncDualBufferMonitor();
 	protected String workingDirname = "data";	
 
@@ -63,6 +65,9 @@ public class RlJawDemo extends RootModel implements RlModelInterface {
 		getRoot(this).setMaxStepSize(0.001);
 
 		addRlController();
+
+		initialState = createState(null);
+		getState(initialState);
 	}
 
 	public void setWorkingDir() {
@@ -83,7 +88,9 @@ public class RlJawDemo extends RootModel implements RlModelInterface {
 
 	@Override
 	public void resetState() {
-		targetMotionController.reset();
+		setState(initialState);
+		initialize(0.0);
+		targetMotionController.randomizeTarget();
 	}
 
 	@Override
@@ -308,6 +315,15 @@ public class RlJawDemo extends RootModel implements RlModelInterface {
 
 		public void reset() {
 			this.reset = true;
+		}
+
+		@Override
+		public void randomizeTarget() {
+			resetRefPosition(false);
+			// Clear velocity so no residual motion carries into the new episode.
+			if (lowerincisor != null) {
+				lowerincisor.setVelocity(new Vector3d());
+			}
 		}
 
 		// TODO: make reset random configurable

@@ -21,6 +21,8 @@ import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JSeparator;
 
+import artisynth.core.driver.Main;
+import artisynth.core.driver.Scheduler;
 import artisynth.core.gui.ControlPanel;
 import artisynth.core.inverse.TargetFrame;
 import artisynth.core.inverse.TargetPoint;
@@ -92,7 +94,14 @@ public class RlController extends ControllerBase
 	protected Boolean excitersUpToDate = true;
 	protected Boolean nextStateUpToDate = false;
 	protected Boolean getNextState = false;
-	protected Boolean nextStateUntilConvergence = false;	
+	protected Boolean nextStateUntilConvergence = false;
+
+	// Reset coordination: HTTP thread sets flags, simulation thread executes reset in apply()
+	private volatile boolean resetPending = false;
+	private volatile boolean resetZeroExcitations = false;
+	private volatile RlState resetResult = null;
+	private final Object resetLock = new Object();
+
 	protected boolean targetsVisible = true;
 	protected boolean sourcesVisible = true;
 	protected boolean enabled = true;
@@ -572,8 +581,21 @@ public class RlController extends ControllerBase
 
 	@Override
 	public void apply(double t0, double t1) {
+		if (resetPending) {
+			myInverseModel.resetState();
+			if (resetZeroExcitations) {
+				setExcitationsZero();
+			}
+			resetResult = getState();
+			synchronized (resetLock) {
+				resetPending = false;
+				resetLock.notifyAll();
+			}
+			return;
+		}
+
 		if (!excitersUpToDate) {
-				
+
 			for (int i = 0; i < excitationValues.size(); ++i) {
 				exciters.get(i).setExcitation(excitationValues.get(i));
 			}
@@ -744,12 +766,27 @@ public class RlController extends ControllerBase
 
 	@Override
 	public RlState resetState(boolean setExcitationsZero) {
-		myInverseModel.resetState();
-		if (setExcitationsZero) {
-			this.setExcitationsZero();
+		resetZeroExcitations = setExcitationsZero;
+		synchronized (resetLock) {
+			resetPending = true;
+			long deadline = System.currentTimeMillis() + 10_000;
+			while (resetPending) {
+				long remaining = deadline - System.currentTimeMillis();
+				if (remaining <= 0) {
+					Log.info("Reset timed out — simulation thread did not respond");
+					resetPending = false;
+					return getState();
+				}
+				try {
+					resetLock.wait(remaining);
+				} catch (InterruptedException e) {
+					Thread.currentThread().interrupt();
+					return getState();
+				}
+			}
 		}
-		Log.info("Reset");
-		return getState();
+		Log.info("Reset complete");
+		return resetResult != null ? resetResult : getState();
 	}
 
 	@Override
@@ -781,6 +818,21 @@ public class RlController extends ControllerBase
 	@Override
 	public boolean getTest() {
 		return testTrial;
+	}
+
+	@Override
+	public boolean isPlaying() {
+		Main m = Main.getMain();
+		return m != null && m.getScheduler().isPlaying();
+	}
+
+	@Override
+	public void play() {
+		Main m = Main.getMain();
+		if (m != null) {
+			Scheduler s = m.getScheduler();
+			if (!s.isPlaying()) s.play();
+		}
 	}
 
 	/**
