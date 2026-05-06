@@ -90,11 +90,24 @@ pip install -e .
 
 ## Running a training session
 
-### Step 1 — Launch ArtiSynth
+### Available environments
 
-Open a terminal and start the simulation server. Model-specific args go inside `'[' ... ']'` (single-quoted brackets so the shell does not interpret them):
+| Gymnasium ID | ArtiSynth model | Observation | RAM / instance |
+|---|---|---|---|
+| `Point2PointEnv-v2` | `RlPoint2PointDemo` | point position (+ excitations) | ~200 MB |
+| `Point2PointEnv-v3` | `RlPoint2PointDemo` (3-D) | point position (+ excitations) | ~200 MB |
+| `SpineEnv-v0` | `RlLumbarSpineDemo` | 6 vertebra orientations (+ excitations) | ~500 MB |
+| `JawEnv-v0` | `RlJawDemo` | lower incisor position (+ excitations) | ~1.5 GB |
+| `JawEnv-v1` | `RlJawDemo` (capsule) | lower incisor position (+ excitations) | ~1.5 GB |
+| `JawEnv-v2` | `RlJawDemo` (capsule + velocity) | position + velocity (+ excitations) | ~1.5 GB |
 
-**Point-to-Point (simplest model):**
+> **Parallelisation note**: RAM scales linearly with `--n_envs`. For Jaw models limit to 2–3 workers; for Point2Point up to 8 workers is practical.
+
+### Step 1 — Launch ArtiSynth (optional)
+
+ArtiSynth auto-launches when the Python script starts if nothing is already listening on the target port. Manual launch is only needed if you want to control the startup flags yourself:
+
+**Point-to-Point:**
 ```bash
 artisynth -model artisynth.models.rl.point2point.RlPoint2PointDemo \
   '[' -port 8080 -radius 5 ']' -play -noGui
@@ -113,7 +126,7 @@ artisynth -model artisynth.models.rl.jaw.RlJawDemo \
   -play -noGui
 ```
 
-Drop `-noGui` to show the 3-D viewer.
+Drop `-noGui` to show the 3-D viewer. Pass `--gui` to the Python script to let it auto-launch ArtiSynth with a viewer.
 
 ### Step 2 — Train
 
@@ -121,24 +134,30 @@ Drop `-noGui` to show the 3-D viewer.
 ```bash
 cd src/python
 python main_sb3.py --env Point2PointEnv-v2 --timesteps 500000
+python main_sb3.py --env SpineEnv-v0       --timesteps 1000000
+python main_sb3.py --env JawEnv-v1         --timesteps 2000000
 ```
 
-Checkpoints are saved every 10 000 steps to `results/Point2PointEnv-v2/`. The final model is saved to `results/Point2PointEnv-v2/sac`.
+Checkpoints are saved every 10 000 steps to `results/<env>/`. The final model is saved to `results/<env>/sac`.
 
 **Parallel environments (faster training):**
 ```bash
 python main_sb3_parallel.py --env Point2PointEnv-v2 --n_envs 4 --timesteps 500000
+python main_sb3_parallel.py --env SpineEnv-v0       --n_envs 2 --timesteps 1000000
+python main_sb3_parallel.py --env JawEnv-v1         --n_envs 2 --timesteps 2000000
 ```
 
-Launches `n_envs` ArtiSynth instances on ports `8080`–`8083`. Each instance runs independently; data collection scales linearly with the number of workers. The final model is saved to `results/Point2PointEnv-v2/sac_parallel`. Use `--port` to change the base port.
+Each worker auto-launches its own ArtiSynth instance on `--port + rank`. The final model is saved to `results/<env>/sac_parallel`. ArtiSynth processes are terminated automatically when training ends.
 
 ### Step 3 — Evaluate
 
 ```bash
 python main_sb3.py --env Point2PointEnv-v2 \
-  --load results/Point2PointEnv-v2/sac \
+  --load results/Point2PointEnv-v2/sac_parallel \
   --test --test_episodes 20
 ```
+
+Add `--gui` to open the ArtiSynth viewer during evaluation (restarts the server if it was running headless).
 
 ### Demo videos
 

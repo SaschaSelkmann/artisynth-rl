@@ -27,14 +27,14 @@ def parse_args():
                    help='Base port; worker i connects to port+i')
     p.add_argument('--n_envs', type=int, default=1,
                    help='Number of parallel environments (ArtiSynth instances)')
-    p.add_argument('--gui',    action='store_true', default=True)
+    p.add_argument('--gui',    action=argparse.BooleanOptionalAction, default=False)
     p.add_argument('--seed',   type=int, default=12345)
 
     # Environment kwargs (forwarded to ArtiSynthBase)
-    p.add_argument('--include_current_state',       action='store_true', default=True)
-    p.add_argument('--include_current_excitations', action='store_true', default=True)
-    p.add_argument('--incremental_actions',         action='store_true', default=False)
-    p.add_argument('--zero_excitations_on_reset',   action='store_true', default=True)
+    p.add_argument('--include_current_state',       action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument('--include_current_excitations', action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument('--incremental_actions',         action=argparse.BooleanOptionalAction, default=False)
+    p.add_argument('--zero_excitations_on_reset',   action=argparse.BooleanOptionalAction, default=True)
     p.add_argument('--goal_threshold', type=float, default=0.1)
     p.add_argument('--goal_reward',    type=float, default=5.0)
     p.add_argument('--reset_step',     type=int,   default=200)
@@ -57,7 +57,7 @@ def parse_args():
     # I/O
     p.add_argument('--save_path', default=None)
     p.add_argument('--load',      default=None)
-    p.add_argument('--test',      action='store_true', default=False)
+    p.add_argument('--test',      action=argparse.BooleanOptionalAction, default=False)
     p.add_argument('--test_episodes', type=int, default=10)
     p.add_argument('--verbose',   type=int, default=1)
     return p.parse_args()

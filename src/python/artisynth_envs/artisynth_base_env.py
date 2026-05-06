@@ -44,6 +44,7 @@ class ArtiSynthBase(gym.Env, ABC):
         self.components = components
         self.zero_excitations_on_reset = zero_excitations_on_reset
 
+        self._artisynth_proc = None  # set by run_artisynth if we launch the process
         self.net = RestClient(ip, port)
         if not RestClient.server_is_alive(ip, port):
             self.run_artisynth(ip, port, artisynth_model, gui, artisynth_args)
@@ -132,8 +133,11 @@ class ArtiSynthBase(gym.Env, ABC):
         if ip not in ('localhost', '0.0.0.0', '127.0.0.1'):
             raise NotImplementedError('Cannot launch ArtiSynth on a remote host.')
         if RestClient.server_is_alive(ip, port):
-            return
-        # Port may be occupied by a crashed/hung ArtiSynth that no longer responds.
+            if not gui:
+                return  # headless server already running — reuse it
+            # GUI requested but server already running (probably headless from
+            # a previous session) — kill and relaunch with GUI.
+            logger.info('GUI requested; restarting existing ArtiSynth on port %d', port)
         self._free_port(port)
         cmd = (f'artisynth -model {artisynth_model} '
                f'[ -port {port} {artisynth_args} ] -play')
@@ -143,6 +147,7 @@ class ArtiSynthBase(gym.Env, ABC):
         logger.info('Launching ArtiSynth on port %d (log: %s)', port, log_path)
         with open(log_path, 'w') as log_file:
             proc = subprocess.Popen(cmd.split(), stdout=log_file, stderr=log_file)
+        self._artisynth_proc = proc
         deadline = _time.monotonic() + startup_timeout
         while not RestClient.server_is_alive(ip, port):
             if proc.poll() is not None:
@@ -158,6 +163,16 @@ class ArtiSynthBase(gym.Env, ABC):
                 )
             logger.info('Waiting for ArtiSynth at port %d …', port)
             _time.sleep(3)
+
+    def close(self):
+        super().close()
+        if self._artisynth_proc is not None and self._artisynth_proc.poll() is None:
+            logger.info('Terminating ArtiSynth on port %d', self.port)
+            self._artisynth_proc.terminate()
+            try:
+                self._artisynth_proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._artisynth_proc.kill()
 
     # --- low-level REST helpers ---
     def get_obs_size(self):

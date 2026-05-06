@@ -21,14 +21,14 @@ def parse_args():
     p.add_argument('--env',     default='Point2PointEnv-v2')
     p.add_argument('--ip',      default='localhost')
     p.add_argument('--port',    type=int, default=8080)
-    p.add_argument('--gui',     action='store_true', default=False)
+    p.add_argument('--gui',     action=argparse.BooleanOptionalAction, default=False)
     p.add_argument('--seed',    type=int, default=12345)
 
     # Environment kwargs (forwarded to ArtiSynthBase)
-    p.add_argument('--include_current_state',       action='store_true', default=True)
-    p.add_argument('--include_current_excitations', action='store_true', default=True)
-    p.add_argument('--incremental_actions',         action='store_true', default=False)
-    p.add_argument('--zero_excitations_on_reset',   action='store_true', default=True)
+    p.add_argument('--include_current_state',       action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument('--include_current_excitations', action=argparse.BooleanOptionalAction, default=True)
+    p.add_argument('--incremental_actions',         action=argparse.BooleanOptionalAction, default=False)
+    p.add_argument('--zero_excitations_on_reset',   action=argparse.BooleanOptionalAction, default=True)
     p.add_argument('--goal_threshold', type=float, default=0.1)
     p.add_argument('--goal_reward',    type=float, default=5.0)
     p.add_argument('--reset_step',     type=int,   default=200)
@@ -54,7 +54,7 @@ def parse_args():
                    help='Path prefix to save model (default: results/<env>/sac)')
     p.add_argument('--load',      default=None,
                    help='Path to a saved model to continue training or test')
-    p.add_argument('--test',      action='store_true', default=False,
+    p.add_argument('--test',      action=argparse.BooleanOptionalAction, default=False,
                    help='Run evaluation instead of training')
     p.add_argument('--test_episodes', type=int, default=10)
     p.add_argument('--verbose',   type=int, default=1)
