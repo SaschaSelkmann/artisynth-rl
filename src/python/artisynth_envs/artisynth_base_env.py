@@ -136,7 +136,7 @@ class ArtiSynthBase(gym.Env, ABC):
         # Port may be occupied by a crashed/hung ArtiSynth that no longer responds.
         self._free_port(port)
         cmd = (f'artisynth -model {artisynth_model} '
-               f'[ -port {port} {artisynth_args} ] -play -noTimeline')
+               f'[ -port {port} {artisynth_args} ] -play')
         if not gui:
             cmd += ' -noGui'
         log_path = os.path.abspath(f'artisynth_{port}.log')
