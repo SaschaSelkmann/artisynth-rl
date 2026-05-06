@@ -1,5 +1,6 @@
 import logging
 import os
+import signal
 import time as _time
 import numpy as np
 import subprocess
@@ -126,7 +127,8 @@ class ArtiSynthBase(gym.Env, ABC):
             self.net.send_msg(True, request_type=c.POST_STR, message=c.PLAY_STR)
             _time.sleep(1.0)  # give the scheduler time to begin advancing
 
-    def run_artisynth(self, ip, port, artisynth_model, gui, artisynth_args=''):
+    def run_artisynth(self, ip, port, artisynth_model, gui, artisynth_args='',
+                      startup_timeout=120):
         if ip not in ('localhost', '0.0.0.0', '127.0.0.1'):
             raise NotImplementedError('Cannot launch ArtiSynth on a remote host.')
         if RestClient.server_is_alive(ip, port):
@@ -137,9 +139,23 @@ class ArtiSynthBase(gym.Env, ABC):
                f'[ -port {port} {artisynth_args} ] -play -noTimeline')
         if not gui:
             cmd += ' -noGui'
-        with open(os.devnull, 'w') as devnull:
-            subprocess.Popen(cmd.split(), stdout=devnull, stderr=devnull)
+        log_path = os.path.abspath(f'artisynth_{port}.log')
+        logger.info('Launching ArtiSynth on port %d (log: %s)', port, log_path)
+        with open(log_path, 'w') as log_file:
+            proc = subprocess.Popen(cmd.split(), stdout=log_file, stderr=log_file)
+        deadline = _time.monotonic() + startup_timeout
         while not RestClient.server_is_alive(ip, port):
+            if proc.poll() is not None:
+                raise RuntimeError(
+                    f'ArtiSynth (port {port}) exited with code {proc.returncode}. '
+                    f'Check {log_path} for details.'
+                )
+            if _time.monotonic() > deadline:
+                proc.terminate()
+                raise RuntimeError(
+                    f'ArtiSynth (port {port}) did not respond within {startup_timeout} s. '
+                    f'Check {log_path} for details.'
+                )
             logger.info('Waiting for ArtiSynth at port %d …', port)
             _time.sleep(3)
 

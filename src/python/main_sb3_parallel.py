@@ -25,9 +25,9 @@ def parse_args():
     p.add_argument('--ip',     default='localhost')
     p.add_argument('--port',   type=int, default=8080,
                    help='Base port; worker i connects to port+i')
-    p.add_argument('--n_envs', type=int, default=4,
+    p.add_argument('--n_envs', type=int, default=1,
                    help='Number of parallel environments (ArtiSynth instances)')
-    p.add_argument('--gui',    action='store_true', default=False)
+    p.add_argument('--gui',    action='store_true', default=True)
     p.add_argument('--seed',   type=int, default=12345)
 
     # Environment kwargs (forwarded to ArtiSynthBase)
@@ -158,8 +158,12 @@ def main():
         env.close()
         return
 
+    ports = [args.port + i for i in range(args.n_envs)]
     print(f'Launching {args.n_envs} parallel environments on ports '
-          f'{args.port}–{args.port + args.n_envs - 1} …')
+          f'{ports[0]}–{ports[-1]} …')
+    print('ArtiSynth startup logs: ' +
+          ', '.join(f'artisynth_{p}.log' for p in ports))
+    print('(this may take up to 2 minutes while all instances start)')
     vec_env = make_vec_env(args)
 
     ent_coef = args.ent_coef
