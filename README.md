@@ -17,6 +17,93 @@ The Java side implements the physics and exposes muscle excitations + state via 
 
 ---
 
+## How the framework works
+
+### Action space and exploration
+
+The action space is the vector of muscle excitations, bounded to `[0, 1]` per muscle (or `[-0.1, +0.1]` for incremental actions). These bounds are defined in `get_state_boundaries()` inside each env class and passed to Gymnasium's `spaces.Box`.
+
+SAC explores by learning a Gaussian policy over this space. With `--ent_coef auto` the entropy coefficient is tuned automatically — no manual exploration schedule is needed.
+
+```python
+# From ArtiSynthBase.init_spaces()
+low_a  = c.LOW_EXCITATION   # 0.0
+high_a = c.HIGH_EXCITATION  # 1.0
+self.action_space = spaces.Box(low=low_a, high=high_a, shape=(action_size,), dtype=np.float32)
+```
+
+### Reward function
+
+The reward function lives entirely in the Python env class. SB3 only ever sees the scalar return value — the full ArtiSynth state dict (positions, velocities, muscle forces, time) is available inside the env to compute any reward signal you need.
+
+```python
+# Point2PointEnv: reward progress toward the target
+def _calculate_reward(self, new_dist, prev_dist):
+    if new_dist < self.goal_threshold:
+        return self.goal_reward, True, {}          # goal reached
+    if prev_dist - new_dist > 0:
+        return 1.0 / self.episode_counter, False, {}  # moving closer
+    return -1.0, False, {}                         # moving away
+
+# SpineEnv: weighted sum of distance, effort, and smoothness
+reward = -(phi_u * w_u + phi_d * w_d + phi_r * w_r) / 10
+
+# JawEnv: log-distance with optional bilateral symmetry penalty
+reward = -w_u * log10(distance + ε) - w_r * muscle_forces - w_s * symmetry_loss
+```
+
+Weights (`--w_u`, `--w_d`, `--w_r`, `--w_s`) are passed as command-line arguments.
+
+### Algorithm choice
+
+SAC is the default because it handles continuous action spaces (muscle excitations) well and requires no manual exploration schedule. It is not hardcoded into Gymnasium — swapping it for another SB3 algorithm requires changing one line:
+
+```python
+# main_sb3.py — replace SAC with TD3 or PPO
+from stable_baselines3 import TD3
+model = TD3('MlpPolicy', env, ...)
+```
+
+Any algorithm that accepts a continuous-action Gymnasium env will work.
+
+### Combining with other control principles
+
+Gymnasium is a thin wrapper. Classical controllers can be integrated at several levels:
+
+**Inside the env** — run a secondary controller in `step()` and fold its output into the reward or observation. The RL agent sees only the net effect:
+
+```python
+def step(self, action):
+    pid_correction = self.pid.compute(self.get_state_dict())
+    blended = 0.7 * action + 0.3 * pid_correction   # blend RL + PID
+    return super().step(blended)
+```
+
+**Inside ArtiSynth** — register additional `ControllerBase` instances alongside `RlController`. They run in the same simulation step and can, for example, enforce joint limits or apply passive stabilising forces before the RL excitations are applied.
+
+```java
+// In addRlController()
+addController(new PassiveStabiliser(mech));  // runs before RlController
+addController(rlController);
+```
+
+**Hierarchical control** — a high-level RL agent sets sub-goals; a low-level classical controller (inverse kinematics, PD) executes them. The high-level env calls `step()` on the low-level env and treats its convergence as a single action.
+
+### Curriculum learning
+
+Increase task difficulty over training by varying the target in `resetState()` on the Java side or by modifying `reset()` in the Python env:
+
+```python
+def reset(self, *, seed=None, options=None):
+    # Gradually expand the target radius as training progresses
+    progress = self.num_resets / self.total_resets
+    self.current_radius = self.min_radius + progress * (self.max_radius - self.min_radius)
+    self.net.send_msg({'radius': self.current_radius}, ...)
+    return super().reset(seed=seed)
+```
+
+---
+
 ## Prerequisites
 
 | Dependency | Minimum | Notes |
