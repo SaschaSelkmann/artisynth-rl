@@ -117,12 +117,20 @@ Drop `-noGui` to show the 3-D viewer.
 
 ### Step 2 — Train
 
+**Single environment:**
 ```bash
 cd src/python
 python main_sb3.py --env Point2PointEnv-v2 --timesteps 500000
 ```
 
 Checkpoints are saved every 10 000 steps to `results/Point2PointEnv-v2/`. The final model is saved to `results/Point2PointEnv-v2/sac`.
+
+**Parallel environments (faster training):**
+```bash
+python main_sb3_parallel.py --env Point2PointEnv-v2 --n_envs 4 --timesteps 500000
+```
+
+Launches `n_envs` ArtiSynth instances on ports `8080`–`8083`. Each instance runs independently; data collection scales linearly with the number of workers. The final model is saved to `results/Point2PointEnv-v2/sac_parallel`. Use `--port` to change the base port.
 
 ### Step 3 — Evaluate
 
