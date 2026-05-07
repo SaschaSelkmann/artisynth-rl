@@ -74,7 +74,11 @@ def _make_objective(base_config: dict):
 
         vec_env  = make_vec_env(config)
         model    = make_model(config, vec_env, run_dir=run_dir)
-        model.learn(total_timesteps=trial_steps, progress_bar=False)
+        model.learn(
+            total_timesteps=trial_steps,
+            progress_bar=False,
+            log_interval=base_config.get('log_interval', 10),
+        )
 
         eval_env = make_env(config, rank=0, test=True)
         rewards  = run_test_episodes(model, eval_env, n_episodes=n_eval)

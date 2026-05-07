@@ -217,36 +217,51 @@ Drop `-noGui` to show the 3-D viewer. Pass `--gui` to the Python script to let i
 
 ### Step 2 — Train
 
-**Single environment:**
+Training is driven by a YAML config file. Each environment has a pre-configured file in `configs/`:
+
 ```bash
 cd src/python
-python main_sb3.py --env Point2PointEnv-v2 --timesteps 500000
-python main_sb3.py --env SpineEnv-v0       --timesteps 1000000
-python main_sb3.py --env JawEnv-v1         --timesteps 2000000
+
+python train.py --config ../../configs/Point2PointEnv-v2.yaml
+python train.py --config ../../configs/SpineEnv-v0.yaml
+python train.py --config ../../configs/JawEnv-v1.yaml
 ```
 
-Checkpoints are saved every 10 000 steps to `results/<env>/`. The final model is saved to `results/<env>/sac`.
+The number of parallel workers is set via `n_envs` in the config (default: 4 for Point2Point, 2 for Spine/Jaw). Each worker auto-launches its own ArtiSynth instance on a separate port. ArtiSynth processes are terminated automatically when training ends.
 
-**Parallel environments (faster training):**
+Any config value can be overridden on the command line:
+
 ```bash
-python main_sb3_parallel.py --env Point2PointEnv-v2 --n_envs 4 --timesteps 500000
-python main_sb3_parallel.py --env SpineEnv-v0       --n_envs 2 --timesteps 1000000
-python main_sb3_parallel.py --env JawEnv-v1         --n_envs 2 --timesteps 2000000
+# Run with a single environment
+python train.py --config ../../configs/Point2PointEnv-v2.yaml --n_envs 1
+
+# Resume from a previous run
+python train.py --config ../../configs/SpineEnv-v0.yaml \
+  --load results/Point2PointEnv-v2/SAC/20260507_105618/
 ```
 
-Each worker auto-launches its own ArtiSynth instance on `--port + rank`. The final model is saved to `results/<env>/sac_parallel`. ArtiSynth processes are terminated automatically when training ends.
+Each run creates a timestamped directory under `results/<env>/<algorithm>/<timestamp>/` containing:
 
-### Step 3 — Monitor training with TensorBoard
+```
+results/SpineEnv-v0/SAC/20260507_143022/
+├── model.zip          ← final policy weights
+├── replay_buffer.pkl  ← experience replay for SAC/TD3/TQC (enables seamless resume)
+├── config.yaml        ← exact config snapshot (for reproducibility)
+├── checkpoints/       ← periodic checkpoints (ckpt_N_steps.zip)
+└── tb/                ← TensorBoard logs
+```
 
-Both training scripts write TensorBoard logs to `tb_logs/` by default. Open a second terminal and run:
+### Step 3 — Monitor with TensorBoard
+
+TensorBoard logs are written to the run's `tb/` subdirectory. The exact command is printed at training start. In a second terminal:
 
 ```bash
-tensorboard --logdir tb_logs
+tensorboard --logdir results/Point2PointEnv-v2/SAC/20260507_105618/tb
+# or compare all runs for one env:
+tensorboard --logdir results/Point2PointEnv-v2/SAC
 ```
 
 Then open [http://localhost:6006](http://localhost:6006) in your browser.
-
-**What you can see:**
 
 | Metric | Meaning |
 |---|---|
@@ -254,31 +269,84 @@ Then open [http://localhost:6006](http://localhost:6006) in your browser.
 | `train/actor_loss` | Policy gradient loss |
 | `train/critic_loss` | Q-function loss |
 | `train/ent_coef` | Current entropy coefficient (with `auto`) |
-| `train/ent_coef_loss` | Loss for entropy auto-tuning |
 | `train/n_updates` | Number of gradient steps so far |
 | `time/fps` | Environment steps per second |
-| `time/episodes` | Total completed episodes |
-
-Each run creates its own timestamped subfolder (`tb_logs/Point2PointEnv-v2_1/`), so successive runs do not overwrite each other. You can compare multiple runs directly in the TensorBoard UI.
-
-**Customise the log directory:**
-
-```bash
-python main_sb3.py --env Point2PointEnv-v2 --tb_log my_experiment
-python main_sb3.py --env Point2PointEnv-v2 --tb_log ''   # disable TensorBoard
-```
 
 ---
 
 ### Step 4 — Evaluate
 
 ```bash
-python main_sb3.py --env Point2PointEnv-v2 \
-  --load results/Point2PointEnv-v2/sac_parallel \
-  --test --test_episodes 20
+python test.py --load results/SpineEnv-v0/SAC/20260507_143022/
+python test.py --load results/SpineEnv-v0/SAC/20260507_143022/ --episodes 20 --gui
 ```
 
+`test.py` reads the algorithm and environment settings automatically from `config.yaml` inside the run directory — no `--config` flag needed.
+
 Add `--gui` to open the ArtiSynth viewer during evaluation (restarts the server if it was running headless).
+
+### Step 5 — Hyperparameter optimisation (Optuna)
+
+The `optuna` section in each YAML config defines the search space. Run optimisation with:
+
+```bash
+python optimize.py --config ../../configs/Point2PointEnv-v2.yaml
+python optimize.py --config ../../configs/Point2PointEnv-v2.yaml --n_trials 100 --n_jobs 2
+```
+
+Each trial trains for `optuna.trial_timesteps` steps (default: `timesteps // 5`) and evaluates over `optuna.eval_episodes` episodes. The study is stored in `results/<env>/<algo>/optuna/study.db` so it can be interrupted and resumed. The best hyperparameters are saved to `results/<env>/<algo>/optuna/best/config.yaml`.
+
+---
+
+### Resuming training and optimisation
+
+#### Resuming a training run
+
+Pass the run directory to `--load`. The script creates a **new** timestamped run directory so the original run is never overwritten:
+
+```bash
+python train.py --config ../../configs/SpineEnv-v0.yaml \
+  --load results/SpineEnv-v0/SAC/20260507_143022/
+```
+
+For off-policy algorithms (SAC, TD3, TQC) the replay buffer is saved automatically at the end of training (`replay_buffer.pkl` next to `model.zip`) and loaded transparently on resume. Training continues from the exact step count of the saved model; `--timesteps` adds *additional* steps on top.
+
+To resume from an intermediate checkpoint rather than the final model, pass the checkpoint path:
+
+```bash
+python train.py --config ../../configs/SpineEnv-v0.yaml \
+  --load results/SpineEnv-v0/SAC/20260507_143022/checkpoints/ckpt_50000_steps
+```
+
+> **PPO**: on-policy — no replay buffer. Resuming loads only the policy weights.
+
+#### Resuming an Optuna study
+
+Re-run the same `optimize.py` command. Optuna reads the existing SQLite database and continues from the last completed trial — no additional flags needed:
+
+```bash
+python optimize.py --config ../../configs/SpineEnv-v0.yaml
+```
+
+The study persists at `results/<env>/<algo>/optuna/study.db`. All completed trials are preserved even after interruption (Ctrl+C, crash, timeout).
+
+#### Storage overview
+
+```
+results/
+└── SpineEnv-v0/
+    └── SAC/
+        ├── 20260507_143022/       ← run created by train.py
+        │   ├── model.zip          ← final policy weights
+        │   ├── replay_buffer.pkl  ← experience replay (SAC/TD3/TQC only)
+        │   ├── config.yaml        ← exact config snapshot
+        │   ├── checkpoints/       ← periodic checkpoints (ckpt_N_steps.zip)
+        │   └── tb/                ← TensorBoard logs
+        └── optuna/
+            ├── study.db           ← Optuna SQLite study (resumable)
+            └── best/
+                └── config.yaml    ← best hyperparameters found
+```
 
 ### Demo videos
 
@@ -287,48 +355,61 @@ Add `--gui` to open the ArtiSynth viewer during evaluation (restarts the server 
 
 ---
 
-## `main_sb3.py` reference
+## Script reference
 
-### Environment options
-
-| Flag | Default | Description |
-|---|---|---|
-| `--env` | `Point2PointEnv-v2` | Gymnasium env ID |
-| `--ip` | `localhost` | ArtiSynth host |
-| `--port` | `8080` | REST API port (must match `-port` in the launch command) |
-| `--gui` | off | Show ArtiSynth viewer when auto-launching |
-| `--seed` | `12345` | RNG seed |
-| `--include_current_state` | on | Append current position to observation |
-| `--include_current_excitations` | on | Append muscle excitations to observation |
-| `--incremental_actions` | off | Actions are deltas added to current excitations |
-| `--zero_excitations_on_reset` | on | Zero all muscles on episode reset |
-| `--goal_threshold` | `0.1` | Distance (m) at which the episode is solved |
-| `--goal_reward` | `5.0` | Reward given on goal reached |
-| `--reset_step` | `200` | Max steps per episode before truncation |
-| `--wait_action` | `0.0` | Simulation seconds to advance after each action |
-
-### SAC hyper-parameters
+### `train.py`
 
 | Flag | Default | Description |
 |---|---|---|
-| `--timesteps` | `500000` | Total environment steps |
-| `--lr` | `3e-4` | Learning rate |
-| `--batch_size` | `256` | Mini-batch size |
-| `--buffer_size` | `100000` | Replay buffer capacity |
-| `--learning_starts` | `1000` | Steps before the first gradient update |
-| `--tau` | `0.005` | Soft target update coefficient |
-| `--gamma` | `0.99` | Discount factor |
-| `--ent_coef` | `auto` | Entropy coefficient (`auto` or a float) |
+| `--config` | required | Path to YAML config file |
+| `--load` | — | Resume from a run directory |
+| `--n_envs` | from config | Override number of parallel workers |
+| `--timesteps` | from config | Override total training steps |
+| `--seed` | from config | Override RNG seed |
+| `--gui` / `--no-gui` | from config | Show ArtiSynth viewer |
 
-### I/O
+### `test.py`
 
 | Flag | Default | Description |
 |---|---|---|
-| `--save_path` | `results/<env>/sac` | Path prefix for the saved model |
-| `--load` | — | Path to a saved model; resumes training or runs evaluation |
-| `--test` | off | Evaluation mode (requires `--load`) |
-| `--test_episodes` | `10` | Number of episodes to run in evaluation mode |
-| `--tb_log` | `tb_logs` | TensorBoard root log directory (empty string disables logging) |
+| `--load` | required | Run directory (contains `model.zip` + `config.yaml`) |
+| `--config` | — | Override config (optional) |
+| `--episodes` | `10` | Number of evaluation episodes |
+| `--gui` / `--no-gui` | off | Show ArtiSynth viewer |
+
+### `optimize.py`
+
+| Flag | Default | Description |
+|---|---|---|
+| `--config` | required | Path to YAML config file |
+| `--n_trials` | from config | Override number of Optuna trials |
+| `--n_jobs` | `1` | Parallel Optuna workers |
+| `--study_name` | `<env>_<algo>` | Optuna study name |
+| `--storage` | SQLite in `results/` | Optuna storage URL |
+
+### YAML config keys
+
+| Key | Description |
+|---|---|
+| `env` | Gymnasium environment ID |
+| `algorithm` | `SAC` \| `TD3` \| `PPO` \| `TQC` |
+| `ip` / `port` | ArtiSynth connection |
+| `n_envs` | Parallel workers |
+| `timesteps` | Total training steps |
+| `seed` | RNG seed |
+| `include_current_state` | Append current position to observation |
+| `include_current_excitations` | Append muscle excitations to observation |
+| `incremental_actions` | Actions are deltas added to current excitations |
+| `zero_excitations_on_reset` | Zero all muscles on episode reset |
+| `goal_threshold` | Distance at which the episode is solved |
+| `goal_reward` | Reward given on goal reached |
+| `reset_step` | Max steps per episode before truncation |
+| `wait_action` | Simulation seconds to advance after each action |
+| `algorithm_kwargs` | Hyperparameters passed to the SB3 constructor |
+| `optuna.n_trials` | Number of Optuna trials |
+| `optuna.trial_timesteps` | Steps per trial (default: `timesteps // 5`) |
+| `optuna.eval_episodes` | Evaluation episodes per trial |
+| `optuna.search_space` | Parameter ranges (see config files for syntax) |
 
 ---
 
@@ -488,6 +569,10 @@ python main_sb3.py --env MyEnv-v1
 
 ```
 artisynth-rl/
+├── configs/                          # per-environment YAML configs
+│   ├── Point2PointEnv-v2.yaml
+│   ├── SpineEnv-v0.yaml
+│   └── JawEnv-v1.yaml
 ├── setup.sh                          # one-shot build + install
 ├── requirements.txt                  # Python dependencies
 ├── environment.yml                   # Conda environment spec
@@ -510,12 +595,20 @@ artisynth-rl/
     │               ├── lumbarspine/RlLumbarSpineDemo.java
     │               └── jaw/RlJawDemo.java
     └── python/
-        ├── main_sb3.py               # training / evaluation entry point
+        ├── train.py                  # training entry point (YAML-driven)
+        ├── test.py                   # evaluation entry point
+        ├── optimize.py               # hyperparameter optimisation (Optuna)
+        ├── rl_lib.py                 # shared: env/model factory, algorithm registry
+        ├── config_utils.py           # shared: YAML load/save, run-dir management
+        ├── main_sb3.py               # reference implementation (deprecated)
+        ├── main_sb3_parallel.py      # reference implementation (deprecated)
         ├── artisynth_envs/
         │   ├── __init__.py           # Gymnasium env registration
         │   ├── artisynth_base_env.py # base Gymnasium class (REST client)
         │   └── envs/
-        │       └── point2point_env.py
+        │       ├── point2point_env.py
+        │       ├── spine_env.py
+        │       └── jaw_env.py
         └── common/
             ├── rest_client.py
             └── constants.py

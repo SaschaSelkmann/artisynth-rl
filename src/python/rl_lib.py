@@ -90,11 +90,27 @@ def make_model(config: dict, env, run_dir: str):
     )
 
 
+_REPLAY_BUFFER_FILE = 'replay_buffer.pkl'
+
+
+def save_model(model, run_dir: str) -> None:
+    model.save(os.path.join(run_dir, 'model'))
+    if hasattr(model, 'replay_buffer') and model.replay_buffer is not None:
+        buf_path = os.path.join(run_dir, _REPLAY_BUFFER_FILE)
+        model.save_replay_buffer(buf_path)
+        print(f'Replay buffer saved → {buf_path}')
+
+
 def load_model(config: dict, env, run_dir: str):
     cls        = get_algorithm_cls(config.get('algorithm', 'SAC'))
     model_path = os.path.join(run_dir, 'model')
     tb_log     = os.path.join(run_dir, 'tb')
-    return cls.load(model_path, env=env, tensorboard_log=tb_log)
+    model      = cls.load(model_path, env=env, tensorboard_log=tb_log)
+    buf_path   = os.path.join(run_dir, _REPLAY_BUFFER_FILE)
+    if os.path.exists(buf_path):
+        model.load_replay_buffer(buf_path)
+        print(f'Replay buffer loaded ← {buf_path}')
+    return model
 
 
 def run_test_episodes(model, env, n_episodes: int = 10) -> list:

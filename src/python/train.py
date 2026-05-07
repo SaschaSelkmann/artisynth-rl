@@ -30,7 +30,7 @@ def main():
     args = parse_args()
 
     from config_utils import load_config, save_config, make_run_dir, merge_cli
-    from rl_lib import make_vec_env, make_model, load_model
+    from rl_lib import make_vec_env, make_model, load_model, save_model
     from stable_baselines3.common.callbacks import CheckpointCallback
 
     config = load_config(args.config)
@@ -74,11 +74,11 @@ def main():
         callback=checkpoint_cb,
         progress_bar=True,
         tb_log_name='train',
+        log_interval=config.get('log_interval', 10),
     )
 
-    model_path = os.path.join(run_dir, 'model')
-    model.save(model_path)
-    print(f'Model saved → {model_path}.zip')
+    save_model(model, run_dir)
+    print(f'Model saved → {os.path.join(run_dir, "model")}.zip')
     vec_env.close()
 
 

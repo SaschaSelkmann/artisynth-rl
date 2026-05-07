@@ -580,6 +580,12 @@ public class RlController extends ControllerBase
 	}
 
 	@Override
+	public void initialize(double t0) {
+		super.initialize(t0);
+		Thread.currentThread().setPriority(Thread.MAX_PRIORITY);
+	}
+
+	@Override
 	public void apply(double t0, double t1) {
 		if (resetPending) {
 			myInverseModel.resetState();

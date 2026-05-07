@@ -23,6 +23,7 @@ wait_action: 0.0
 n_envs: 2
 seed: 12345
 timesteps: 2000000
+log_interval: 10   # write TensorBoard metrics every N episodes (reduce for less disk I/O stutter)
 
 # Algorithm hyperparameters
 algorithm_kwargs:
