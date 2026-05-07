@@ -59,6 +59,8 @@ def parse_args():
     p.add_argument('--load',      default=None)
     p.add_argument('--test',      action=argparse.BooleanOptionalAction, default=False)
     p.add_argument('--test_episodes', type=int, default=10)
+    p.add_argument('--tb_log',    default='tb_logs',
+                   help='TensorBoard root log directory (empty string disables logging)')
     p.add_argument('--verbose',   type=int, default=1)
     return p.parse_args()
 
@@ -128,6 +130,14 @@ def make_single_env(args):
 
 
 def main():
+    import warnings
+    warnings.warn(
+        'main_sb3_parallel.py is a reference implementation and is not actively maintained. '
+        'Use train.py / test.py with a YAML config file instead.',
+        DeprecationWarning,
+        stacklevel=1,
+    )
+
     args = parse_args()
 
     from stable_baselines3 import SAC
@@ -166,6 +176,8 @@ def main():
     print('(this may take up to 2 minutes while all instances start)')
     vec_env = make_vec_env(args)
 
+    tb_log = args.tb_log or None
+
     ent_coef = args.ent_coef
     try:
         ent_coef = float(ent_coef)
@@ -173,7 +185,7 @@ def main():
         pass
 
     if args.load is not None:
-        model = SAC.load(args.load, env=vec_env)
+        model = SAC.load(args.load, env=vec_env, tensorboard_log=tb_log)
         print(f'Resuming training from {args.load}')
     else:
         model = SAC(
@@ -188,6 +200,7 @@ def main():
             ent_coef=ent_coef,
             verbose=args.verbose,
             seed=args.seed,
+            tensorboard_log=tb_log,
         )
 
     checkpoint_cb = CheckpointCallback(
@@ -196,9 +209,17 @@ def main():
         name_prefix='sac_checkpoint',
     )
 
+    if tb_log:
+        print(f'TensorBoard logs → {os.path.abspath(tb_log)}')
+        print(f'  tensorboard --logdir {os.path.abspath(tb_log)}')
     print(f'Training SAC on {args.env} with {args.n_envs} workers '
           f'for {args.timesteps:,} steps …')
-    model.learn(total_timesteps=args.timesteps, callback=checkpoint_cb, progress_bar=True)
+    model.learn(
+        total_timesteps=args.timesteps,
+        callback=checkpoint_cb,
+        progress_bar=True,
+        tb_log_name=f'{args.env}_parallel',
+    )
 
     model.save(save_path)
     print(f'Model saved to {save_path}')

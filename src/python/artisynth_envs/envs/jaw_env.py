@@ -10,7 +10,8 @@ logger = setup_logger()
 
 class JawEnv(ArtiSynthBase):
     def __init__(self, wait_action, reset_step, goal_threshold, goal_reward,
-                 goal_hack=False, **kwargs):
+                 goal_hack: bool = False,
+                 w_u: float = 1.0, w_r: float = 0.3, w_s: float = 0.5, **kwargs):
         super().__init__(**kwargs)
 
         self.episode_counter = 0
@@ -20,6 +21,10 @@ class JawEnv(ArtiSynthBase):
         self.goal_reward = goal_reward
         self.goal_hack = goal_hack
         self.goal_th_step = 0
+
+        self.w_u = w_u
+        self.w_r = w_r
+        self.w_s = w_s
 
         self.init_spaces(incremental_actions=self.incremental_actions)
 

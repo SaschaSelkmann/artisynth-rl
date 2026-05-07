@@ -20,11 +20,11 @@ class ArtiSynthBase(gym.Env, ABC):
     metadata = {"render_modes": []}
 
     def __init__(self, ip, port, artisynth_model, test, components, zero_excitations_on_reset,
-                 include_current_excitations, include_current_state, w_s, w_u, w_d, w_r, seed,
+                 include_current_excitations, include_current_state, seed,
                  incremental_actions, gui, artisynth_args='', **kwargs):
         super().__init__()
         if kwargs:
-            logger.warning(f'Unused kwargs: {list(kwargs.keys())}')
+            logger.warning('Unused kwargs: %s', list(kwargs.keys()))
 
         self.ip = ip
         self.port = port
@@ -33,11 +33,6 @@ class ArtiSynthBase(gym.Env, ABC):
         self.include_current_excitations = include_current_excitations
         self.include_current_state = include_current_state
         self.incremental_actions = incremental_actions
-
-        self.w_u = w_u
-        self.w_d = w_d
-        self.w_r = w_r
-        self.w_s = w_s
 
         self.action_size = 0
         self.obs_size = 0

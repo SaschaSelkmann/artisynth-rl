@@ -1,0 +1,46 @@
+# FEM jaw model (condylar capsule, no disc)
+# Reward function: src/python/artisynth_envs/envs/jaw_env.py → _calc_reward()
+# Weights (w_u, w_r, w_s) are defined as defaults in JawEnv.__init__().
+
+env: JawEnv-v1
+algorithm: SAC
+
+# ArtiSynth connection
+ip: localhost
+port: 8080
+
+# Env behaviour
+include_current_state: true
+include_current_excitations: true
+incremental_actions: false
+zero_excitations_on_reset: true
+goal_threshold: 0.02
+goal_reward: 10.0
+reset_step: 300
+wait_action: 0.0
+
+# Training infrastructure
+n_envs: 2
+seed: 12345
+timesteps: 2000000
+
+# Algorithm hyperparameters
+algorithm_kwargs:
+  learning_rate: 1.0e-4
+  batch_size: 256
+  gamma: 0.99
+  buffer_size: 300000
+  learning_starts: 5000
+  tau: 0.005
+  ent_coef: auto
+
+# Optuna search space
+optuna:
+  n_trials: 30
+  trial_timesteps: 400000
+  eval_episodes: 5
+  search_space:
+    learning_rate: {type: float, low: 1.0e-5, high: 1.0e-3, log: true}
+    batch_size:    {type: categorical, choices: [128, 256, 512]}
+    gamma:         {type: float, low: 0.95, high: 0.9999}
+    learning_starts: {type: int, low: 1000, high: 10000}

@@ -99,6 +99,10 @@ python main_sb3.py --env Point2PointEnv-v2 --gui --test \
 
 Boolean flags use `--flag` / `--no-flag` syntax (e.g. `--no-gui`, `--no-test`).
 
+# TensorBoard (enabled by default)
+tensorboard --logdir tb_logs   # open http://localhost:6006
+# Pass --tb_log '' to disable logging.
+
 ---
 
 ## Architecture

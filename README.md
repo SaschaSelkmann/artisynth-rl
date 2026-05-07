@@ -236,7 +236,41 @@ python main_sb3_parallel.py --env JawEnv-v1         --n_envs 2 --timesteps 20000
 
 Each worker auto-launches its own ArtiSynth instance on `--port + rank`. The final model is saved to `results/<env>/sac_parallel`. ArtiSynth processes are terminated automatically when training ends.
 
-### Step 3 — Evaluate
+### Step 3 — Monitor training with TensorBoard
+
+Both training scripts write TensorBoard logs to `tb_logs/` by default. Open a second terminal and run:
+
+```bash
+tensorboard --logdir tb_logs
+```
+
+Then open [http://localhost:6006](http://localhost:6006) in your browser.
+
+**What you can see:**
+
+| Metric | Meaning |
+|---|---|
+| `train/reward` | Mean episode return (rolling) |
+| `train/actor_loss` | Policy gradient loss |
+| `train/critic_loss` | Q-function loss |
+| `train/ent_coef` | Current entropy coefficient (with `auto`) |
+| `train/ent_coef_loss` | Loss for entropy auto-tuning |
+| `train/n_updates` | Number of gradient steps so far |
+| `time/fps` | Environment steps per second |
+| `time/episodes` | Total completed episodes |
+
+Each run creates its own timestamped subfolder (`tb_logs/Point2PointEnv-v2_1/`), so successive runs do not overwrite each other. You can compare multiple runs directly in the TensorBoard UI.
+
+**Customise the log directory:**
+
+```bash
+python main_sb3.py --env Point2PointEnv-v2 --tb_log my_experiment
+python main_sb3.py --env Point2PointEnv-v2 --tb_log ''   # disable TensorBoard
+```
+
+---
+
+### Step 4 — Evaluate
 
 ```bash
 python main_sb3.py --env Point2PointEnv-v2 \
@@ -294,6 +328,7 @@ Add `--gui` to open the ArtiSynth viewer during evaluation (restarts the server 
 | `--load` | — | Path to a saved model; resumes training or runs evaluation |
 | `--test` | off | Evaluation mode (requires `--load`) |
 | `--test_episodes` | `10` | Number of episodes to run in evaluation mode |
+| `--tb_log` | `tb_logs` | TensorBoard root log directory (empty string disables logging) |
 
 ---
 
