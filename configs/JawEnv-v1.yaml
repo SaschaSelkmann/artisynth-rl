@@ -4,6 +4,7 @@
 
 env: JawEnv-v1
 algorithm: SAC
+run_name: jaw_baseline
 
 # ArtiSynth connection
 ip: localhost

@@ -52,7 +52,7 @@ reward = -(phi_u * w_u + phi_d * w_d + phi_r * w_r) / 10
 reward = -w_u * log10(distance + ε) - w_r * muscle_forces - w_s * symmetry_loss
 ```
 
-Weights (`--w_u`, `--w_d`, `--w_r`, `--w_s`) are passed as command-line arguments.
+Weights (`w_u`, `w_d`, `w_r`, `w_s`) are defined as defaults in each env's `__init__()` and can be overridden via `algorithm_kwargs` in the YAML config.
 
 ### Algorithm choice
 
@@ -237,13 +237,13 @@ python train.py --config ../../configs/Point2PointEnv-v2.yaml --n_envs 1
 
 # Resume from a previous run
 python train.py --config ../../configs/SpineEnv-v0.yaml \
-  --load results/Point2PointEnv-v2/SAC/20260507_105618/
+  --load results/spine_baseline/
 ```
 
-Each run creates a timestamped directory under `results/<env>/<algorithm>/<timestamp>/` containing:
+Each run saves to a stable directory `results/<run_name>/` (set via `run_name` in the YAML config):
 
 ```
-results/SpineEnv-v0/SAC/20260507_143022/
+results/spine_baseline/
 ├── model.zip          ← final policy weights
 ├── replay_buffer.pkl  ← experience replay for SAC/TD3/TQC (enables seamless resume)
 ├── config.yaml        ← exact config snapshot (for reproducibility)
@@ -256,9 +256,9 @@ results/SpineEnv-v0/SAC/20260507_143022/
 TensorBoard logs are written to the run's `tb/` subdirectory. The exact command is printed at training start. In a second terminal:
 
 ```bash
-tensorboard --logdir results/Point2PointEnv-v2/SAC/20260507_105618/tb
-# or compare all runs for one env:
-tensorboard --logdir results/Point2PointEnv-v2/SAC
+tensorboard --logdir results/point2point_baseline/tb
+# or compare multiple runs side-by-side:
+tensorboard --logdir results/
 ```
 
 Then open [http://localhost:6006](http://localhost:6006) in your browser.
@@ -277,8 +277,8 @@ Then open [http://localhost:6006](http://localhost:6006) in your browser.
 ### Step 4 — Evaluate
 
 ```bash
-python test.py --load results/SpineEnv-v0/SAC/20260507_143022/
-python test.py --load results/SpineEnv-v0/SAC/20260507_143022/ --episodes 20 --gui
+python test.py --load results/spine_baseline/
+python test.py --load results/spine_baseline/ --episodes 20 --gui
 ```
 
 `test.py` reads the algorithm and environment settings automatically from `config.yaml` inside the run directory — no `--config` flag needed.
@@ -294,7 +294,7 @@ python optimize.py --config ../../configs/Point2PointEnv-v2.yaml
 python optimize.py --config ../../configs/Point2PointEnv-v2.yaml --n_trials 100 --n_jobs 2
 ```
 
-Each trial trains for `optuna.trial_timesteps` steps (default: `timesteps // 5`) and evaluates over `optuna.eval_episodes` episodes. The study is stored in `results/<env>/<algo>/optuna/study.db` so it can be interrupted and resumed. The best hyperparameters are saved to `results/<env>/<algo>/optuna/best/config.yaml`.
+Each trial trains for `optuna.trial_timesteps` steps (default: `timesteps // 5`) and evaluates over `optuna.eval_episodes` episodes. The study is stored in `results/<run_name>/optuna/study.db` so it can be interrupted and resumed. The best hyperparameters are saved to `results/<run_name>/optuna/best/config.yaml`.
 
 ---
 
@@ -302,11 +302,11 @@ Each trial trains for `optuna.trial_timesteps` steps (default: `timesteps // 5`)
 
 #### Resuming a training run
 
-Pass the run directory to `--load`. The script creates a **new** timestamped run directory so the original run is never overwritten:
+Pass the run directory to `--load`. Because the path is stable (`results/<run_name>/`), the same command always points to the same run:
 
 ```bash
 python train.py --config ../../configs/SpineEnv-v0.yaml \
-  --load results/SpineEnv-v0/SAC/20260507_143022/
+  --load results/spine_baseline/
 ```
 
 For off-policy algorithms (SAC, TD3, TQC) the replay buffer is saved automatically at the end of training (`replay_buffer.pkl` next to `model.zip`) and loaded transparently on resume. Training continues from the exact step count of the saved model; `--timesteps` adds *additional* steps on top.
@@ -315,7 +315,7 @@ To resume from an intermediate checkpoint rather than the final model, pass the 
 
 ```bash
 python train.py --config ../../configs/SpineEnv-v0.yaml \
-  --load results/SpineEnv-v0/SAC/20260507_143022/checkpoints/ckpt_50000_steps
+  --load results/spine_baseline/checkpoints/ckpt_50000_steps
 ```
 
 > **PPO**: on-policy — no replay buffer. Resuming loads only the policy weights.
@@ -328,24 +328,22 @@ Re-run the same `optimize.py` command. Optuna reads the existing SQLite database
 python optimize.py --config ../../configs/SpineEnv-v0.yaml
 ```
 
-The study persists at `results/<env>/<algo>/optuna/study.db`. All completed trials are preserved even after interruption (Ctrl+C, crash, timeout).
+The study persists at `results/<run_name>/optuna/study.db`. All completed trials are preserved even after interruption (Ctrl+C, crash, timeout).
 
 #### Storage overview
 
 ```
 results/
-└── SpineEnv-v0/
-    └── SAC/
-        ├── 20260507_143022/       ← run created by train.py
-        │   ├── model.zip          ← final policy weights
-        │   ├── replay_buffer.pkl  ← experience replay (SAC/TD3/TQC only)
-        │   ├── config.yaml        ← exact config snapshot
-        │   ├── checkpoints/       ← periodic checkpoints (ckpt_N_steps.zip)
-        │   └── tb/                ← TensorBoard logs
-        └── optuna/
-            ├── study.db           ← Optuna SQLite study (resumable)
-            └── best/
-                └── config.yaml    ← best hyperparameters found
+└── spine_baseline/            ← run_name from SpineEnv-v0.yaml
+    ├── model.zip              ← final policy weights
+    ├── replay_buffer.pkl      ← experience replay (SAC/TD3/TQC only)
+    ├── config.yaml            ← exact config snapshot
+    ├── checkpoints/           ← periodic checkpoints (ckpt_N_steps.zip)
+    ├── tb/                    ← TensorBoard logs
+    └── optuna/
+        ├── study.db           ← Optuna SQLite study (resumable)
+        └── best/
+            └── config.yaml    ← best hyperparameters found
 ```
 
 ### Demo videos
@@ -393,6 +391,7 @@ results/
 |---|---|
 | `env` | Gymnasium environment ID |
 | `algorithm` | `SAC` \| `TD3` \| `PPO` \| `TQC` |
+| `run_name` | Stable directory name under `results/` (used for saving, resuming, and Optuna) |
 | `ip` / `port` | ArtiSynth connection |
 | `n_envs` | Parallel workers |
 | `timesteps` | Total training steps |

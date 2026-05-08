@@ -1,6 +1,5 @@
 import os
 import yaml
-from datetime import datetime
 
 
 def load_config(path: str) -> dict:
@@ -21,11 +20,14 @@ def save_config(config: dict, run_dir: str) -> None:
         yaml.dump(config, f, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
 
+def get_run_dir(config: dict) -> str:
+    run_name = config.get('run_name') or \
+        f'{config.get("env", "run")}_{config.get("algorithm", "SAC")}'
+    return os.path.join('results', run_name)
+
+
 def make_run_dir(config: dict) -> str:
-    env  = config.get('env', 'unknown')
-    algo = config.get('algorithm', 'SAC')
-    ts   = datetime.now().strftime('%Y%m%d_%H%M%S')
-    path = os.path.join('results', env, algo, ts)
+    path = get_run_dir(config)
     os.makedirs(path, exist_ok=True)
     return path
 

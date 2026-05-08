@@ -98,18 +98,18 @@ def main():
     except ImportError:
         raise ImportError('Install optuna first: pip install optuna')
 
-    from config_utils import load_config, save_config
+    from config_utils import load_config, save_config, get_run_dir
 
     config     = load_config(args.config)
     optuna_cfg = config.get('optuna', {})
     n_trials   = args.n_trials or optuna_cfg.get('n_trials', 50)
-    algo       = config.get('algorithm', 'SAC')
-    study_name = args.study_name or f'{config["env"]}_{algo}'
+    run_dir    = get_run_dir(config)
+    study_name = args.study_name or config.get('run_name', f'{config["env"]}_{config.get("algorithm","SAC")}')
 
     if args.storage:
         storage = args.storage
     else:
-        db_dir  = os.path.join('results', config['env'], algo, 'optuna')
+        db_dir  = os.path.join(run_dir, 'optuna')
         os.makedirs(db_dir, exist_ok=True)
         storage = f'sqlite:///{os.path.join(db_dir, "study.db")}'
 
@@ -131,7 +131,7 @@ def main():
     best_config = dict(config)
     best_config['algorithm_kwargs'] = dict(config.get('algorithm_kwargs', {}))
     best_config['algorithm_kwargs'].update(study.best_params)
-    best_dir = os.path.join('results', config['env'], algo, 'optuna', 'best')
+    best_dir = os.path.join(run_dir, 'optuna', 'best')
     os.makedirs(best_dir, exist_ok=True)
     save_config(best_config, best_dir)
     print(f'Best config → {best_dir}/config.yaml')
