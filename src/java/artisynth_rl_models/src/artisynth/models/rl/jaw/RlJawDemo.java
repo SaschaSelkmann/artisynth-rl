@@ -15,6 +15,7 @@ import artisynth.core.modelbase.ComponentState;
 import artisynth.core.modelbase.ControllerBase;
 import artisynth.core.modelbase.StepAdjustment;
 import artisynth.core.monitors.AsyncDualBufferMonitor;
+import artisynth.core.rl.FreeRunStrategy;
 import artisynth.core.rl.Log;
 import artisynth.core.rl.RlController;
 import artisynth.core.rl.RlModelInterface;
@@ -96,6 +97,8 @@ public class RlJawDemo extends RootModel implements RlModelInterface {
 	@Override
 	public void addRlController() {
 		rlTrack = new RlController(myJawModel, (RlModelInterface) this, "RlTracker", this.port, false);
+		// Keep legacy unthrottled stepping for this demo and its trained policies.
+		rlTrack.setStepStrategy(new FreeRunStrategy());
 
 		// rlTrack.addMotionTarget(myJawModel.rigidBodies().get("jaw"));
 		rlTrack.addMotionTarget(myJawModel.frameMarkers().get("lowerincisor"));

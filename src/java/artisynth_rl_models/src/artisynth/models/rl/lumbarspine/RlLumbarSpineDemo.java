@@ -6,6 +6,7 @@ import java.util.Map;
 
 import artisynth.core.mechmodels.MuscleExciter;
 import artisynth.core.modelbase.ComponentState;
+import artisynth.core.rl.FreeRunStrategy;
 import artisynth.core.rl.RlModelInterface;
 import artisynth.core.rl.RlProp;
 import artisynth.core.rl.RlTargetControllerInterface;
@@ -49,7 +50,9 @@ public class RlLumbarSpineDemo extends InvLumbarSpineDemo implements RlModelInte
 	// ------------ Implement RlModelInterface -------------
 	@Override
 	public void addRlController() {
-		rlTrack = new RlController(mech, (RlModelInterface) this, "InvTracker", this.port);		
+		rlTrack = new RlController(mech, (RlModelInterface) this, "InvTracker", this.port);
+		// Keep legacy unthrottled stepping for this demo and its trained policies.
+		rlTrack.setStepStrategy(new FreeRunStrategy());
 
 		for (String src_rb_str : sourceRigidBodies) {
 			rlTrack.addMotionTarget(mech.rigidBodies().get(src_rb_str));

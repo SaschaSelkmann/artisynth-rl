@@ -28,6 +28,7 @@ import artisynth.core.modelbase.Controller;
 import artisynth.core.modelbase.ControllerBase;
 import artisynth.core.modelbase.Model;
 import artisynth.core.modelbase.StepAdjustment;
+import artisynth.core.rl.FreeRunStrategy;
 import artisynth.core.rl.Log;
 import artisynth.core.rl.RlController;
 import artisynth.core.rl.RlModelInterface;
@@ -495,6 +496,9 @@ public class RlPoint2PointDemo extends RootModel implements RlModelInterface {
 	@Override
 	public void addRlController() {
 		rlTrack = new RlController(mech, (RlModelInterface) this, "InvTracker", this.port);
+		// Preserve legacy unthrottled behaviour for this demo (matches all
+		// previously trained RlPoint2PointDemo policies and YAML configs).
+		rlTrack.setStepStrategy(new FreeRunStrategy());
 
 		rlTrack.addMotionTarget(mech.frameMarkers().get(point_name));
 

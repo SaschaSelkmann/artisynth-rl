@@ -96,6 +96,10 @@ public class RlController extends ControllerBase
 	protected Boolean getNextState = false;
 	protected Boolean nextStateUntilConvergence = false;
 
+	// Pluggable advance policy. Default is deterministic stepped advance —
+	// see StepStrategy. Demos can override via setStepStrategy().
+	private StepStrategy stepStrategy = new SteppedStrategy(5);
+
 	// Reset coordination: HTTP thread sets flags, simulation thread executes reset in apply()
 	private volatile boolean resetPending = false;
 	private volatile boolean resetZeroExcitations = false;
@@ -706,18 +710,63 @@ public class RlController extends ControllerBase
 
 	@Override
 	public RlState setExcitations(ArrayList<Double> excitations) {
-		excitationValues = excitations;
-		excitersUpToDate = false;
 		Log.debug("setExcitations");
 		if (getNextState) {
+			// legacy lookahead path (state save/restore around manual advance)
+			stageExcitations(excitations);
 			nextStateUpToDate = false;
 			Log.info("waiting for next state");
 			waitForNextState();
 			Log.info("next state done");
 			return nextState;
 		}
+		RlState result = stepStrategy.applyExcitations(this, excitations);
 		Log.debug("setExcitations done");
-		return new RlState();
+		return result;
+	}
+
+	/**
+	 * Stage a new excitation vector for the next {@link #apply} call to
+	 * push onto the muscles. Used by {@link StepStrategy} implementations.
+	 */
+	public void stageExcitations(ArrayList<Double> values) {
+		this.excitationValues = values;
+		this.excitersUpToDate = false;
+	}
+
+	/**
+	 * Step size of the underlying mech system in seconds. Used by stepped
+	 * strategies to compute how long to advance the simulation per action.
+	 */
+	public double getMechStepSize() {
+		return myMech.getMaxStepSize();
+	}
+
+	/**
+	 * Returns the {@link RootModel} that owns this controller. The reference
+	 * is the same object as {@code myInverseModel} but typed for callers
+	 * that need to invoke {@code advance(...)} or other RootModel methods
+	 * directly.
+	 */
+	public artisynth.core.workspace.RootModel getRootModel() {
+		return (artisynth.core.workspace.RootModel) myInverseModel;
+	}
+
+	/**
+	 * Replace the current step strategy. Calls
+	 * {@link StepStrategy#initialize(RlController)} on the new strategy.
+	 * Intended to be called once at controller-setup time, not per step.
+	 */
+	public void setStepStrategy(StepStrategy strategy) {
+		if (strategy == null) {
+			throw new IllegalArgumentException("StepStrategy must not be null");
+		}
+		this.stepStrategy = strategy;
+		strategy.initialize(this);
+	}
+
+	public StepStrategy getStepStrategy() {
+		return stepStrategy;
 	}
 
 	public void setExcitationsZero() {
@@ -772,6 +821,20 @@ public class RlController extends ControllerBase
 
 	@Override
 	public RlState resetState(boolean setExcitationsZero) {
+		if (stepStrategy.isSynchronous()) {
+			// In stepped mode the simulator is paused between actions, so it
+			// is safe to mutate model state directly on the HTTP thread.
+			myInverseModel.resetState();
+			if (setExcitationsZero) {
+				setExcitationsZero();
+			}
+			stepStrategy.onReset(this);
+			Log.info("Reset complete (synchronous)");
+			return getState();
+		}
+
+		// Free-run / legacy path: hand the reset over to the simulation
+		// thread (it will pick it up in the next apply() call) and wait.
 		resetZeroExcitations = setExcitationsZero;
 		synchronized (resetLock) {
 			resetPending = true;
