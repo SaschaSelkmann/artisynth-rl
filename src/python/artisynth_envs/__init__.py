@@ -113,3 +113,29 @@ register(
                 c.PROPS: ['position', 'velocity']},
             }
 )
+
+# Two-link arm with four muscles tracking a sin/cos joint-angle trajectory.
+# RlProps (joint0/joint1 + *_ref) replace the `components` dict-based observation
+# layout used by the other envs, so no `components` kwargs are needed here.
+register(
+    id='ToyMuscleArmEnv-v0',
+    entry_point='artisynth_envs.envs:ToyMuscleArmEnv',
+    kwargs={
+        'artisynth_model': 'artisynth.models.rl.toymusclearm.RlToyMuscleArmDemo',
+        # Default to deterministic stepped advance; -waitAction must match the
+        # Python `wait_action` so each agent step covers the same sim time.
+        'artisynth_args': '-episodeDuration 10 -randomizeTraj true '
+                           '-stepStrategy stepped -waitAction 0.05',
+        # `components` is required by ArtiSynthBase but unused here — the env
+        # reads RlProps directly via its own state_dic_to_array override.
+        c.COMPONENTS: {c.CURRENT: [], c.TARGET: [], c.PROPS: []},
+        'episode_duration': 10.0,
+        'wait_action': 0.05,
+        'max_abs_error_deg': 60.0,
+        'goal_threshold_deg': 5.0,
+        'goal_reward': 0.1,
+        'divergence_window': 10,
+        'w_u': 1.0,
+        'w_r': 0.01,
+    }
+)

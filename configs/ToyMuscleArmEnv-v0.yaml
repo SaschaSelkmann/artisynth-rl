@@ -1,0 +1,50 @@
+# Two-link arm with four muscles tracking a sin/cos reference trajectory.
+# Reward function: src/python/artisynth_envs/envs/toymusclearm_env.py → _reward()
+
+env: ToyMuscleArmEnv-v0
+algorithm: SAC
+run_name: toymusclearm_baseline
+
+# ArtiSynth connection
+ip: localhost
+port: 8080
+
+# Env behaviour
+include_current_state: true
+include_current_excitations: true
+incremental_actions: false
+zero_excitations_on_reset: true
+episode_duration: 10.0          # seconds; truncates the episode
+wait_action: 0.05               # advance the simulation 50 ms between actions
+max_abs_error_deg: 60.0         # hard termination threshold per joint
+goal_threshold_deg: 5.0         # bonus when both joints stay below this
+goal_reward: 0.1                # per-step bonus
+divergence_window: 10           # consecutive worsening steps -> terminate
+w_u: 1.0                        # tracking-error weight
+w_r: 0.01                       # excitation-effort weight
+
+# Training infrastructure
+n_envs: 4
+seed: 12345
+timesteps: 750000
+log_interval: 1000
+
+# Algorithm hyperparameters
+algorithm_kwargs:
+  learning_rate: 3.0e-4
+  batch_size: 256
+  gamma: 0.99
+  buffer_size: 100000
+  learning_starts: 2000
+  tau: 0.005
+  ent_coef: auto
+
+# Optuna search space (used by optimize.py)
+optuna:
+  n_trials: 50
+  trial_timesteps: 100000
+  eval_episodes: 5
+  search_space:
+    learning_rate: {type: float, low: 1.0e-5, high: 1.0e-3, log: true}
+    batch_size:    {type: categorical, choices: [64, 128, 256, 512]}
+    gamma:         {type: float, low: 0.9, high: 0.9999}
