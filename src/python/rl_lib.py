@@ -101,12 +101,23 @@ def save_model(model, run_dir: str) -> None:
         print(f'Replay buffer saved → {buf_path}')
 
 
-def load_model(config: dict, env, run_dir: str):
-    cls        = get_algorithm_cls(config.get('algorithm', 'SAC'))
-    model_path = os.path.join(run_dir, 'model')
-    tb_log     = os.path.join(run_dir, 'tb')
-    model      = cls.load(model_path, env=env, tensorboard_log=tb_log)
-    buf_path   = os.path.join(run_dir, _REPLAY_BUFFER_FILE)
+def load_model(config: dict, env, load_path: str):
+    cls = get_algorithm_cls(config.get('algorithm', 'SAC'))
+
+    # Accept either a run directory (results/<name>/) or an explicit
+    # checkpoint file (results/<name>/checkpoints/ckpt_*_steps[.zip]).
+    if os.path.isdir(load_path):
+        run_dir    = load_path.rstrip('/')
+        model_path = os.path.join(run_dir, 'model')
+    else:
+        model_path = load_path[:-4] if load_path.endswith('.zip') else load_path
+        run_dir    = os.path.dirname(load_path)
+        if os.path.basename(run_dir) == 'checkpoints':
+            run_dir = os.path.dirname(run_dir)
+
+    tb_log   = os.path.join(run_dir, 'tb')
+    model    = cls.load(model_path, env=env, tensorboard_log=tb_log)
+    buf_path = os.path.join(run_dir, _REPLAY_BUFFER_FILE)
     if os.path.exists(buf_path):
         model.load_replay_buffer(buf_path)
         print(f'Replay buffer loaded ← {buf_path}')

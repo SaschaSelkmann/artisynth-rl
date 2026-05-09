@@ -4,6 +4,7 @@ Evaluate a trained ArtiSynth RL model.
 Usage:
     python test.py --load results/SpineEnv-v0/SAC/20260507_143022/
     python test.py --load results/SpineEnv-v0/SAC/20260507_143022/ --episodes 20 --gui
+    python test.py --load results/toymusclearm_baseline/ --episodes 5 --report
 """
 import argparse
 import os
@@ -19,6 +20,9 @@ def parse_args():
     p.add_argument('--episodes', type=int,      default=10)
     p.add_argument('--gui',      action=argparse.BooleanOptionalAction, default=False)
     p.add_argument('--seed',     type=int,      default=None)
+    p.add_argument('--report',   action=argparse.BooleanOptionalAction, default=False,
+                   help='Record per-step data and write CSV + PDF report under '
+                        '<run_dir>/eval_<timestamp>/')
     return p.parse_args()
 
 
@@ -36,9 +40,24 @@ def main():
     env = make_env(config, rank=0, test=True)
     model = load_model(config, env, args.load)
 
-    algo = config.get('algorithm', 'SAC')
-    print(f'Evaluating {config["env"]} ({algo}) for {args.episodes} episodes …')
-    run_test_episodes(model, env, n_episodes=args.episodes)
+    algo    = config.get('algorithm', 'SAC')
+    env_id  = config['env']
+    run_name = config.get('run_name', os.path.basename(os.path.normpath(args.load)))
+    print(f'Evaluating {env_id} ({algo}) for {args.episodes} episodes …')
+
+    if args.report:
+        from eval_report import run_and_report
+        # --load can be a run dir or a (possibly nested) checkpoint file.
+        if os.path.isdir(args.load):
+            run_dir = args.load
+        else:
+            parent = os.path.dirname(args.load)
+            run_dir = (os.path.dirname(parent)
+                       if os.path.basename(parent) == 'checkpoints' else parent)
+        run_and_report(model, env, n_episodes=args.episodes, run_dir=run_dir,
+                       env_id=env_id, run_name=run_name)
+    else:
+        run_test_episodes(model, env, n_episodes=args.episodes)
     env.close()
 
 
