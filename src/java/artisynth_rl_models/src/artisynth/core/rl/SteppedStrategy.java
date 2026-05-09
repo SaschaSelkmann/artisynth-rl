@@ -4,6 +4,7 @@ import java.util.ArrayList;
 
 import artisynth.core.driver.Main;
 import artisynth.core.driver.Scheduler;
+import artisynth.core.moviemaker.MovieMaker;
 
 /**
  * Synchronous, deterministic stepping: each submitted excitation vector
@@ -96,6 +97,26 @@ public class SteppedStrategy implements StepStrategy {
       // granularity than Thread.sleep(1) (which Linux rounds up).
       while (s.isPlaying()) {
          java.util.concurrent.locks.LockSupport.parkNanos (50_000); // 50 µs
+      }
+
+      // ArtiSynth's normal frame-capture fires from the RenderProbe inside
+      // the scheduler's tick loop. In stepped mode the scheduler is paused
+      // most of the time so that path produces no frames. Trigger a grab
+      // explicitly here — once per RL step — when MovieMaker is recording.
+      // forceGrab() synchronously calls rerender() + paint(); the regular
+      // grab() only schedules an async repaint which produces a black frame
+      // when the viewer's render loop is dormant.
+      Main main = Main.getMain();
+      if (main != null) {
+         MovieMaker mm = main.getMovieMaker();
+         if (mm != null && mm.isGrabbing()) {
+            try {
+               mm.forceGrab();
+            }
+            catch (Exception e) {
+               Log.info ("frame grab failed: " + e.getMessage());
+            }
+         }
       }
       return controller.getState();
    }

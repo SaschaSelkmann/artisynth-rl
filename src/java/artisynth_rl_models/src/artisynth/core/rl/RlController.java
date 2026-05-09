@@ -23,6 +23,7 @@ import javax.swing.JSeparator;
 
 import artisynth.core.driver.Main;
 import artisynth.core.driver.Scheduler;
+import artisynth.core.moviemaker.MovieMaker;
 import artisynth.core.gui.ControlPanel;
 import artisynth.core.inverse.TargetFrame;
 import artisynth.core.inverse.TargetPoint;
@@ -902,6 +903,78 @@ public class RlController extends ControllerBase
 			Scheduler s = m.getScheduler();
 			if (!s.isPlaying()) s.play();
 		}
+	}
+
+	// --- video recording (GUI-only) -----------------------------------
+
+	private String recordingName = null;
+
+	@Override
+	public String startRecording(String name, String outputDir, double fps) {
+		Main main = Main.getMain();
+		if (main == null || main.getViewer() == null) {
+			throw new IllegalStateException(
+				"Recording requires GUI mode — no viewer available.");
+		}
+		MovieMaker mm = main.getMovieMaker();
+		if (outputDir != null && !outputDir.isEmpty()) {
+			java.io.File dir = new java.io.File(outputDir);
+			if (!dir.exists()) {
+				dir.mkdirs();
+			}
+			mm.setMovieFolder(dir);
+		}
+		// Off-screen capture via the GL framebuffer object. Requires a
+		// hardware-accelerated GL backend; software Mesa (e.g. WSL2 without
+		// GPU passthrough) yields black frames because the FBO never gets
+		// populated. See README → "Video recording requirements".
+		int w = main.getViewer().getScreenWidth();
+		int h = main.getViewer().getScreenHeight();
+		mm.setCaptureArea(
+			new java.awt.Rectangle(0, 0, w, h),
+			new java.awt.Dimension(w, h));
+		mm.setFrameRate(fps);
+		mm.setMethod(MovieMaker.Method.FFMPEG);
+		mm.resetFrameCounter();
+		mm.setGrabbing(true);
+		this.recordingName = (name != null && !name.isEmpty()) ? name : "recording";
+		String msg = "Recording started → " + mm.getMovieFolderPath()
+			+ " (" + w + "x" + h + ", fps=" + fps + ", method=FFMPEG)";
+		Log.info(msg);
+		return msg;
+	}
+
+	@Override
+	public Map<String, Object> stopRecording() {
+		Main main = Main.getMain();
+		if (main == null || main.getViewer() == null) {
+			throw new IllegalStateException(
+				"Recording requires GUI mode — no viewer available.");
+		}
+		MovieMaker mm = main.getMovieMaker();
+		mm.setGrabbing(false);
+		Map<String, Object> info = new LinkedHashMap<>();
+		// We deliberately skip mm.render(): it streams ffmpeg's stdout
+		// through the MovieMakerDialog (which we never open) and would NPE.
+		// The PNG frames are already on disk; the Python caller runs
+		// ffmpeg itself and gets full control over codec / fps / output.
+		String name = (this.recordingName != null) ? this.recordingName : "recording";
+		try {
+			int frames = mm.close();
+			info.put("frames", frames);
+			info.put("framePattern", "frame%05d.png");
+			info.put("frameRate", mm.getFrameRate());
+			info.put("outputDir", mm.getMovieFolderPath());
+			info.put("baseName", name);
+			Log.info("Recording stopped — " + info);
+		}
+		catch (Exception e) {
+			Log.info("Movie close failed: " + e.getMessage());
+			info.put("frames", -1);
+			info.put("error", e.getMessage());
+		}
+		this.recordingName = null;
+		return info;
 	}
 
 	/**

@@ -1,5 +1,7 @@
 package artisynth.core.rl;
 
+import java.util.Map;
+
 import spark.Request;
 import spark.Response;
 import spark.Route;
@@ -44,10 +46,28 @@ public class RlRestApi {
 		get("/isPlaying", (req, res) -> rlController.isPlaying(), json());
 		post("/play", (req, res) -> { rlController.play(); return true; }, json());
 
+		// --- video recording (GUI-only) ---
+		post("/recording/start", startRecording, json());
+		post("/recording/stop",  (req, res) -> rlController.stopRecording(), json());
+
 		after((req, res) -> res.type("application/json"));
 
 		exception(IllegalArgumentException.class, (e, req, res) -> {
 			res.status(400);
+			res.body(toJson(new ResponseError(e)));
+		});
+
+		exception(IllegalStateException.class, (e, req, res) -> {
+			res.status(409);  // 409 Conflict — server in wrong state for this op
+			res.body(toJson(new ResponseError(e)));
+		});
+
+		// Catch-all so an unmapped exception inside a route returns a JSON
+		// 500 instead of silently closing the TCP connection.
+		exception(Exception.class, (e, req, res) -> {
+			Log.info("Unhandled server exception: " + e.getClass().getSimpleName()
+				+ ": " + e.getMessage());
+			res.status(500);
 			res.body(toJson(new ResponseError(e)));
 		});
 	}
@@ -57,5 +77,15 @@ public class RlRestApi {
 		Gson gson = new Gson();
 		RlMuscleProps rlExcitations = gson.fromJson(request.body(), RlMuscleProps.class);
 		return this.rlController.setExcitations(rlExcitations.getProps());
+	};
+
+	public Route startRecording = (Request request, Response response) -> {
+		Gson gson = new Gson();
+		@SuppressWarnings("unchecked")
+		Map<String, Object> body = gson.fromJson(request.body(), Map.class);
+		String name      = body != null && body.get("name") != null      ? (String) body.get("name") : "recording";
+		String outputDir = body != null && body.get("outputDir") != null ? (String) body.get("outputDir") : null;
+		double fps       = body != null && body.get("fps") != null       ? ((Number) body.get("fps")).doubleValue() : 30.0;
+		return this.rlController.startRecording(name, outputDir, fps);
 	};
 }

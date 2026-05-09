@@ -285,6 +285,55 @@ python test.py --load results/spine_baseline/ --episodes 20 --gui
 
 Add `--gui` to open the ArtiSynth viewer during evaluation (restarts the server if it was running headless).
 
+#### Evaluation report (CSV + PDF)
+
+```bash
+python test.py --load results/toymusclearm_baseline/ --episodes 5 --report
+```
+
+`--report` records every step's observation/action/reward into a CSV and writes a multi-page PDF under `<run_dir>/eval_<timestamp>/`. For the ToyMuscleArm env the PDF shows joint actual vs target, error, excitations and reward per episode; other envs fall back to a generic obs/action plot.
+
+#### Video recording
+
+```bash
+python test.py --load results/toymusclearm_baseline/ --episodes 3 --video
+```
+
+`--video` implies `--gui`. While the agent runs, ArtiSynth grabs one viewer frame per RL step into `<run_dir>/eval_<timestamp>/frame*.png`; after the run, `test.py` calls system `ffmpeg` to assemble them into `<run_dir>/eval_<timestamp>/eval.mp4`. Override the frame rate with `--video-fps N` (default 20 fps = real-time playback for `wait_action=0.05`).
+
+##### Video recording requirements
+
+The capture path uses an OpenGL framebuffer object (FBO) on the simulation's viewer. **You need a hardware-accelerated GL driver** for the frames to contain anything; software-rendered Mesa (e.g. plain WSL2 without GPU passthrough) will produce all-black frames even when everything else looks fine. Verified working environments:
+
+| Environment | Status | Notes |
+|---|---|---|
+| Native Linux + NVIDIA / Intel / AMD GPU driver | ✅ | Default supported case |
+| WSL2 + WSLg + GPU passthrough (CUDA-on-WSL) | ✅ | Works once `glxinfo \| grep "OpenGL renderer"` shows the GPU and not `llvmpipe` |
+| WSL2 with software Mesa only | ❌ | Frames are black; train/test still work but `--video` is unusable |
+| Headless / no display | ❌ | Recording requires the viewer; GUI-only feature |
+
+Quick check before launching:
+
+```bash
+glxinfo | grep "OpenGL renderer"
+# good:  e.g. "NVIDIA GeForce ..." or "Intel(R) UHD Graphics ..."
+# bad:   "llvmpipe (LLVM ..., 256 bits)"   ← software Mesa
+```
+
+If `ffmpeg` isn't installed (`sudo apt install ffmpeg`), the PNG frames are left in place and `test.py` prints the manual command to assemble them.
+
+#### Testing beyond the trained episode length
+
+The episode length is fixed at training time via `episode_duration` in the YAML (10 s by default). To stress-test whether the policy generalises beyond that window without retraining, override the value at evaluation time:
+
+```bash
+# Run 30-second episodes against a model trained on 10-second episodes
+python test.py --load results/toymusclearm_baseline/ \
+    --episodes 5 --episode-duration 30 --report
+```
+
+`wait_action` stays as configured, so the per-step dynamics match training exactly — the only thing that changes is `max_steps`, scaling linearly with `episode_duration`. Combine with `--report` to see in the per-episode plots whether the tracking error stays bounded over the longer horizon, or with `--video` to watch the extended rollout.
+
 ### Step 5 — Hyperparameter optimisation (Optuna)
 
 The `optuna` section in each YAML config defines the search space. Run optimisation with:
