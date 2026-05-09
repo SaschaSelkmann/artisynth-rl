@@ -88,8 +88,9 @@ public class RlToyMuscleArmDemo extends RootModel implements RlModelInterface {
          MuscleExciter.class, "mex", "muscleExcitation");
 
    protected RlController rlTrack;
-   protected SinCosTrajectory trajectory;
+   protected JointAngleTrajectory trajectory;
    protected TrajectoryTargetController targetMotionController;
+   protected String trajKind = "multisine";   // "multisine" | "sin"
 
    private ComponentState initialState;
    private double myTime = 0.0;
@@ -261,10 +262,34 @@ public class RlToyMuscleArmDemo extends RootModel implements RlModelInterface {
          phase1Deg = Double.parseDouble (dict.get ("-phase1"));
       if (dict.containsKey ("-randomizeTraj"))
          randomizeTraj = Boolean.parseBoolean (dict.get ("-randomizeTraj"));
+      if (dict.containsKey ("-trajKind"))
+         trajKind = dict.get ("-trajKind");
       if (dict.containsKey ("-stepStrategy"))
          stepStrategyName = dict.get ("-stepStrategy");
       if (dict.containsKey ("-waitAction"))
          waitAction = Double.parseDouble (dict.get ("-waitAction"));
+   }
+
+   /**
+    * Build the reference {@link JointAngleTrajectory} based on the
+    * {@code -trajKind} CLI argument. Custom shapes plug in by adding a new
+    * case here and an implementation under
+    * {@code artisynth.models.rl.toymusclearm}.
+    */
+   protected JointAngleTrajectory buildTrajectory() {
+      switch (trajKind) {
+         case "sin":
+            return new SinCosTrajectory (
+               Math.toRadians (amp0Deg), Math.toRadians (amp1Deg),
+               freq0Hz, freq1Hz,
+               Math.toRadians (phase0Deg), Math.toRadians (phase1Deg));
+         case "multisine":
+            return new MultiSineTrajectory();
+         default:
+            Log.info ("Unknown -trajKind '" + trajKind
+                      + "'; falling back to 'multisine'.");
+            return new MultiSineTrajectory();
+      }
    }
 
    /**
@@ -286,10 +311,7 @@ public class RlToyMuscleArmDemo extends RootModel implements RlModelInterface {
 
    @Override
    public void addRlController() {
-      trajectory = new SinCosTrajectory (
-         Math.toRadians (amp0Deg), Math.toRadians (amp1Deg),
-         freq0Hz, freq1Hz,
-         Math.toRadians (phase0Deg), Math.toRadians (phase1Deg));
+      trajectory = buildTrajectory();
       trajectory.setRandomizeEnabled (randomizeTraj);
 
       rlTrack = new RlController (myMech, this, "InvTracker", port);

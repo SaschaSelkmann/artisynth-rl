@@ -29,4 +29,14 @@ public interface JointAngleTrajectory {
     * episode.
     */
    void randomize(Random rng);
+
+   /**
+    * Toggle whether {@link #randomize(Random)} actually resamples
+    * parameters. Default no-op so implementations that always randomise can
+    * skip this hook. {@code SinCosTrajectory} and {@code MultiSineTrajectory}
+    * override to honour the flag.
+    */
+   default void setRandomizeEnabled(boolean enabled) {
+      // default: no-op
+   }
 }

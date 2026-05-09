@@ -1,5 +1,6 @@
-# Two-link arm with four muscles tracking a sin/cos reference trajectory.
+# Two-link arm with four muscles tracking a multi-sine reference trajectory.
 # Reward function: src/python/artisynth_envs/envs/toymusclearm_env.py → _reward()
+# Termination:    same file → _terminated()
 
 env: ToyMuscleArmEnv-v0
 algorithm: SAC
@@ -14,14 +15,26 @@ include_current_state: true
 include_current_excitations: true
 incremental_actions: false
 zero_excitations_on_reset: true
-episode_duration: 10.0          # seconds; truncates the episode
-wait_action: 0.05               # advance the simulation 50 ms between actions
-max_abs_error_deg: 60.0         # hard termination threshold per joint
-goal_threshold_deg: 5.0         # bonus when both joints stay below this
-goal_reward: 0.1                # per-step bonus
-divergence_window: 10           # consecutive worsening steps -> terminate
-w_u: 1.0                        # tracking-error weight
-w_r: 0.01                       # excitation-effort weight
+episode_duration: 10.0          # seconds; episode runs the full duration unless physics breaks
+wait_action: 0.05               # sim seconds advanced per agent step (= 200 steps / episode)
+
+# Reward shaping
+goal_threshold_deg: 5.0         # per-step +goal_reward when both errors below this
+goal_reward: 0.1
+w_u: 1.0                        # tracking-error weight (theta - theta_ref)^2
+w_r: 0.01                       # excitation-effort weight ||u||^2
+
+# Termination — pure physical-failure checks. Tracking error is NOT used here;
+# the reward function alone shapes tracking quality so transient excursions
+# and oscillations around the trajectory are tolerated.
+pinned_enabled: true            # joint stuck against its hard limit
+pinned_angle_tol_deg: 1.0
+pinned_velocity_tol: 0.1        # rad/s
+pinned_consecutive_steps: 20    # 1.0 s of sim time
+
+velocity_blowup_enabled: true   # numerical instability safety net
+velocity_blowup_rad_s: 30.0
+velocity_blowup_consecutive_steps: 5
 
 # Training infrastructure
 n_envs: 4

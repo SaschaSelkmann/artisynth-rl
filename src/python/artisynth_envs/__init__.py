@@ -122,20 +122,28 @@ register(
     entry_point='artisynth_envs.envs:ToyMuscleArmEnv',
     kwargs={
         'artisynth_model': 'artisynth.models.rl.toymusclearm.RlToyMuscleArmDemo',
-        # Default to deterministic stepped advance; -waitAction must match the
-        # Python `wait_action` so each agent step covers the same sim time.
+        # Default: deterministic stepped advance + multisine reference. The
+        # `-waitAction` value must match the Python `wait_action` so each
+        # agent step covers the same sim time.
         'artisynth_args': '-episodeDuration 10 -randomizeTraj true '
-                           '-stepStrategy stepped -waitAction 0.05',
+                           '-stepStrategy stepped -waitAction 0.05 '
+                           '-trajKind multisine',
         # `components` is required by ArtiSynthBase but unused here — the env
         # reads RlProps directly via its own state_dic_to_array override.
         c.COMPONENTS: {c.CURRENT: [], c.TARGET: [], c.PROPS: []},
         'episode_duration': 10.0,
         'wait_action': 0.05,
-        'max_abs_error_deg': 60.0,
         'goal_threshold_deg': 5.0,
         'goal_reward': 0.1,
-        'divergence_window': 10,
         'w_u': 1.0,
         'w_r': 0.01,
+        # Pure physical-failure termination (no tracking-error checks).
+        'pinned_enabled': True,
+        'pinned_angle_tol_deg': 1.0,
+        'pinned_velocity_tol': 0.1,
+        'pinned_consecutive_steps': 20,           # 1 s sim time
+        'velocity_blowup_enabled': True,
+        'velocity_blowup_rad_s': 30.0,
+        'velocity_blowup_consecutive_steps': 5,
     }
 )

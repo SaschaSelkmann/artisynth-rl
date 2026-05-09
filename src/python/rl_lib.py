@@ -31,8 +31,19 @@ def filter_algorithm_kwargs(cls, kwargs: dict) -> dict:
     return filtered
 
 
+_FORWARDED_OPTIONAL_KEYS = (
+    # ToyMuscleArm-specific reward + termination tuning. Other envs ignore
+    # these via their **kwargs catch-all.
+    'episode_duration', 'goal_threshold_deg', 'w_u', 'w_r',
+    'pinned_enabled', 'pinned_angle_tol_deg', 'pinned_velocity_tol',
+    'pinned_consecutive_steps',
+    'velocity_blowup_enabled', 'velocity_blowup_rad_s',
+    'velocity_blowup_consecutive_steps',
+)
+
+
 def _base_env_kwargs(config: dict, test: bool = False) -> dict:
-    return dict(
+    kwargs = dict(
         ip=config.get('ip', 'localhost'),
         port=config.get('port', 8080),
         gui=config.get('gui', False),
@@ -47,6 +58,13 @@ def _base_env_kwargs(config: dict, test: bool = False) -> dict:
         reset_step=config.get('reset_step', 200),
         wait_action=config.get('wait_action', 0.0),
     )
+    # Only forward optional keys that are explicitly set in the YAML so the
+    # env's own __init__ defaults stay authoritative when the user omits
+    # them.
+    for k in _FORWARDED_OPTIONAL_KEYS:
+        if k in config:
+            kwargs[k] = config[k]
+    return kwargs
 
 
 def make_env(config: dict, rank: int = 0, test: bool = False):

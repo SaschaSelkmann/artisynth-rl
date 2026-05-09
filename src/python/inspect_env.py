@@ -61,7 +61,18 @@ def parse_args():
     p.add_argument('--seed', type=int, default=42)
     p.add_argument('--gui', action=argparse.BooleanOptionalAction, default=False)
     p.add_argument('--save_plot', default=None,
-                   help='path to write a PNG of per-episode reference trajectories')
+                   help='path to write a PNG of per-episode reference trajectories '
+                        '(taken from the rollouts; only the visited steps are plotted)')
+    p.add_argument('--show-trajectory', dest='show_trajectory',
+                   metavar='PATH', default=None,
+                   help='Sample N=8 full reference trajectories with zero '
+                        'excitation, plot them with hinge limits drawn, and '
+                        'exit. Bypasses the env step logic so termination '
+                        'criteria do not cut episodes short.')
+    p.add_argument('--show-trajectory-n', dest='show_trajectory_n',
+                   type=int, default=8,
+                   help='Number of episodes to sample for --show-trajectory '
+                        '(default 8)')
     return p.parse_args()
 
 
@@ -110,6 +121,53 @@ def fmt_stats(arr, labels, units, low, high):
     return '\n'.join(lines)
 
 
+def show_trajectory(env, port: int, n_episodes: int, save_path: str,
+                    seed: int = 42) -> None:
+    """Sample `n_episodes` full reference trajectories (200 steps each, zero
+    excitation) by hitting the REST endpoint directly so the Python env's
+    termination logic doesn't cut things short. Plot each episode for both
+    joints with the physical hinge limits drawn as red dashed lines."""
+    import requests
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    JOINT_LIMITS_DEG = (70.0, 120.0)
+    URL = f'http://localhost:{port}'
+    n_steps = int(env.unwrapped.max_steps)
+
+    fig, axes = plt.subplots(2, 1, figsize=(11, 6.5), sharex=True)
+    for ep in range(n_episodes):
+        requests.post(f'{URL}/setSeed', json=int(seed + ep))
+        requests.post(f'{URL}/reset', json=True)
+        ref0, ref1, ts = [], [], []
+        zero_ex = {'excitations': [0.0, 0.0, 0.0, 0.0]}
+        for s in range(n_steps):
+            r = requests.post(f'{URL}/excitations', json=zero_ex).json()
+            ref0.append(math.degrees(r['properties']['joint0_ref'][0]))
+            ref1.append(math.degrees(r['properties']['joint1_ref'][0]))
+            ts.append(float(r.get('time', s * 0.05)))
+        # rebase time to start at 0 for a clean x-axis
+        ts = [t - ts[0] for t in ts]
+        axes[0].plot(ts, ref0, lw=1.0, alpha=0.75, label=f'ep {ep}')
+        axes[1].plot(ts, ref1, lw=1.0, alpha=0.75)
+
+    for j in (0, 1):
+        lim = JOINT_LIMITS_DEG[j]
+        axes[j].axhline(+lim, color='red', ls='--', lw=0.8)
+        axes[j].axhline(-lim, color='red', ls='--', lw=0.8)
+        axes[j].set_ylabel(f'joint{j}_ref [deg]')
+        axes[j].grid(alpha=0.3)
+    axes[0].legend(loc='upper right', fontsize=8, ncol=4)
+    axes[1].set_xlabel('sim time [s]')
+    fig.suptitle(f'{n_episodes} sample reference trajectories — '
+                 'red dashed = hinge limits')
+    fig.tight_layout()
+    fig.savefig(save_path, dpi=110)
+    plt.close(fig)
+    print(f'saved {n_episodes} sample trajectories to {save_path}')
+
+
 def main():
     args = parse_args()
     rng = np.random.default_rng(args.seed)
@@ -122,6 +180,12 @@ def main():
         incremental_actions=False, zero_excitations_on_reset=True,
         disable_env_checker=True,
     )
+
+    if args.show_trajectory:
+        show_trajectory(env, args.port, args.show_trajectory_n,
+                        args.show_trajectory, args.seed)
+        env.close()
+        return
     a_space = env.action_space
     o_space = env.observation_space
     n_obs = o_space.shape[0]
